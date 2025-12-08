@@ -1,14 +1,205 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+model banned_bidders {
+  id         Int       @id @default(autoincrement())
+  product_id Int?
+  user_id    Int?
+  reason     String?   @db.VarChar(255)
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  products   products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users      users?    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([product_id, user_id])
+}
+
+model bids {
+  id          Int         @id @default(autoincrement())
+  product_id  Int?
+  bidder_id   Int?
+  amount      Decimal     @db.Decimal(15, 2)
+  max_amount  Decimal?    @db.Decimal(15, 2)
+  is_auto_bid Boolean?    @default(false)
+  time        DateTime?   @default(now()) @db.Timestamptz(6)
+  status      bid_status? @default(VALID)
+  users       users?      @relation(fields: [bidder_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products    products?   @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([bidder_id], map: "idx_bids_bidder_id")
+  @@index([product_id], map: "idx_bids_product_id")
+}
+
+model categories {
+  id               Int          @id @default(autoincrement())
+  parent_id        Int?
+  name             String       @db.VarChar(255)
+  created_at       DateTime?    @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime?    @default(now()) @db.Timestamptz(6)
+  categories       categories?  @relation("categoriesTocategories", fields: [parent_id], references: [id], onUpdate: NoAction)
+  other_categories categories[] @relation("categoriesTocategories")
+  products         products[]
+}
+
+model chat_messages {
+  id                                     Int       @id @default(autoincrement())
+  product_id                             Int?
+  sender_id                              Int?
+  receiver_id                            Int?
+  content                                String
+  is_read                                Boolean?  @default(false)
+  created_at                             DateTime? @default(now()) @db.Timestamptz(6)
+  products                               products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_chat_messages_receiver_idTousers users?    @relation("chat_messages_receiver_idTousers", fields: [receiver_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_chat_messages_sender_idTousers   users?    @relation("chat_messages_sender_idTousers", fields: [sender_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model feedbacks {
+  id                                  Int       @id @default(autoincrement())
+  product_id                          Int?
+  from_user_id                        Int?
+  to_user_id                          Int?
+  score                               Int?
+  comment                             String?
+  created_at                          DateTime? @default(now()) @db.Timestamptz(6)
+  users_feedbacks_from_user_idTousers users?    @relation("feedbacks_from_user_idTousers", fields: [from_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products                            products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_feedbacks_to_user_idTousers   users?    @relation("feedbacks_to_user_idTousers", fields: [to_user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model product_descriptions {
+  id         Int       @id @default(autoincrement())
+  product_id Int?
+  content    String
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  products   products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model product_images {
+  id         Int       @id @default(autoincrement())
+  product_id Int?
+  url        String    @db.VarChar(255)
+  is_primary Boolean?  @default(false)
+  products   products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model product_questions {
+  id          Int       @id @default(autoincrement())
+  product_id  Int?
+  user_id     Int?
+  question    String
+  answer      String?
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+  answered_at DateTime? @db.Timestamptz(6)
+  products    products? @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users       users?    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model products {
+  id                              Int                      @id @default(autoincrement())
+  seller_id                       Int?
+  category_id                     Int?
+  name                            String                   @db.VarChar(255)
+  thumbnail                       String?                  @db.VarChar(255)
+  description                     String?
+  start_price                     Decimal                  @db.Decimal(15, 2)
+  current_price                   Decimal?                 @default(0) @db.Decimal(15, 2)
+  step_price                      Decimal                  @db.Decimal(15, 2)
+  buy_now_price                   Decimal?                 @db.Decimal(15, 2)
+  start_time                      DateTime                 @db.Timestamptz(6)
+  end_time                        DateTime                 @db.Timestamptz(6)
+  is_auto_extend                  Boolean?                 @default(true)
+  status                          product_status?          @default(ACTIVE)
+  winner_id                       Int?
+  view_count                      Int?                     @default(0)
+  created_at                      DateTime?                @default(now()) @db.Timestamptz(6)
+  updated_at                      DateTime?                @default(now()) @db.Timestamptz(6)
+  search_vector                   Unsupported("tsvector")?
+  banned_bidders                  banned_bidders[]
+  bids                            bids[]
+  chat_messages                   chat_messages[]
+  feedbacks                       feedbacks[]
+  product_descriptions            product_descriptions[]
+  product_images                  product_images[]
+  product_questions               product_questions[]
+  categories                      categories?              @relation(fields: [category_id], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  users_products_seller_idTousers users?                   @relation("products_seller_idTousers", fields: [seller_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_products_winner_idTousers users?                   @relation("products_winner_idTousers", fields: [winner_id], references: [id], onUpdate: NoAction)
+  watchlists                      watchlists[]
+
+  @@index([search_vector], map: "idx_products_search", type: Gin)
+}
+
+model upgrade_requests {
+  id         Int             @id @default(autoincrement())
+  user_id    Int?
+  reason     String?
+  status     upgrade_status? @default(PENDING)
+  created_at DateTime?       @default(now()) @db.Timestamptz(6)
+  users      users?          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model users {
+  id                                             Int                 @id @default(autoincrement())
+  email                                          String              @unique @db.VarChar(255)
+  password                                       String              @db.VarChar(255)
+  full_name                                      String              @db.VarChar(255)
+  address                                        String?
+  role                                           user_role?          @default(BIDDER)
+  rating_score                                   Float?              @default(0)
+  rating_count                                   Int?                @default(0)
+  is_verified                                    Boolean?            @default(false)
+  created_at                                     DateTime?           @default(now()) @db.Timestamptz(6)
+  updated_at                                     DateTime?           @default(now()) @db.Timestamptz(6)
+  hashed_refresh_token                           String?
+  banned_bidders                                 banned_bidders[]
+  bids                                           bids[]
+  chat_messages_chat_messages_receiver_idTousers chat_messages[]     @relation("chat_messages_receiver_idTousers")
+  chat_messages_chat_messages_sender_idTousers   chat_messages[]     @relation("chat_messages_sender_idTousers")
+  feedbacks_feedbacks_from_user_idTousers        feedbacks[]         @relation("feedbacks_from_user_idTousers")
+  feedbacks_feedbacks_to_user_idTousers          feedbacks[]         @relation("feedbacks_to_user_idTousers")
+  product_questions                              product_questions[]
+  products_products_seller_idTousers             products[]          @relation("products_seller_idTousers")
+  products_products_winner_idTousers             products[]          @relation("products_winner_idTousers")
+  upgrade_requests                               upgrade_requests[]
+  watchlists                                     watchlists[]
+}
+
+model watchlists {
+  user_id    Int
+  product_id Int
+  created_at DateTime? @default(now()) @db.Timestamptz(6)
+  products   products  @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([user_id, product_id])
+}
+
+enum bid_status {
+  VALID
+  REJECTED
+}
+
+enum product_status {
+  ACTIVE
+  SOLD
+  EXPIRED
+  CANCELLED
+}
+
+enum upgrade_status {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum user_role {
+  BIDDER
+  SELLER
+  ADMIN
 }

@@ -7,15 +7,16 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 @Injectable()
 export class RtStrategy extends PassportStrategy(Strategy, 'jwt-refresh') {
   constructor(config: ConfigService) {
-    const secret = config.get<string>('JWT_RT_SECRET');
+    const secret = config.get<string>('JWT_REFRESH_SECRET');
     if (!secret) {
-      throw new Error('JWT_RT_SECRET is not set in configuration');
+      throw new Error('JWT_REFRESH_SECRET is not set in configuration');
     }
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       secretOrKey: secret,
+      passReqToCallback: true,
     });
   }
 

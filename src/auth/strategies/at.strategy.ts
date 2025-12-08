@@ -6,9 +6,9 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 @Injectable()
 export class AtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(config: ConfigService) {
-    const secret = config.get<string>('JWT_AT_SECRET');
+    const secret = config.get<string>('JWT_SECRET');
     if (!secret) {
-      throw new Error('JWT_AT_SECRET is not set in configuration');
+      throw new Error('JWT_SECRET is not set in configuration');
     }
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),

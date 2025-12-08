@@ -11,7 +11,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private config: ConfigService,
-  ) {}
+  ) { }
 
   async getTokens(userId: number, email: string, role: string) {
     const payload = { sub: userId, email, role };
@@ -40,8 +40,15 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto) {
+    // check if user already exists
+    const user = await this.prisma.users.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (user) throw new ForbiddenException('User already exists');
+
     const hashedPassword = await bcrypt.hash(dto.password, 10);
-    const user = await this.prisma.users.create({
+    const newUser = await this.prisma.users.create({
       data: {
         email: dto.email,
         password: hashedPassword,
@@ -49,8 +56,8 @@ export class AuthService {
       },
     });
 
-    const tokens = await this.getTokens(user.id, user.email, user.role);
-    await this.updateRefreshTokenHash(user.id, tokens.refresh_token);
+    const tokens = await this.getTokens(newUser.id, newUser.email, newUser.role || "BIDDER");
+    await this.updateRefreshTokenHash(newUser.id, tokens.refresh_token);
 
     return tokens;
   }
@@ -65,7 +72,7 @@ export class AuthService {
     const pwMatches = await bcrypt.compare(dto.password, user.password);
     if (!pwMatches) throw new ForbiddenException('Invalid credentials');
 
-    const tokens = await this.getTokens(user.id, user.email, user.role);
+    const tokens = await this.getTokens(user.id, user.email, user.role || "BIDDER");
     await this.updateRefreshTokenHash(user.id, tokens.refresh_token);
 
     return tokens;
@@ -91,7 +98,7 @@ export class AuthService {
     const rtMatches = await bcrypt.compare(rt, user.hashed_refresh_token);
     if (!rtMatches) throw new ForbiddenException('Access Denied');
 
-    const tokens = await this.getTokens(user.id, user.email, user.role);
+    const tokens = await this.getTokens(user.id, user.email, user.role || "BIDDER");
     await this.updateRefreshTokenHash(user.id, tokens.refresh_token);
 
     return tokens;
