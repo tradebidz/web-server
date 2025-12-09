@@ -10,6 +10,9 @@ export class RegisterDto {
 
   @IsNotEmpty()
   full_name: string;
+
+  @IsNotEmpty()
+  recaptcha_token: string;
 }
 
 export class LoginDto {
