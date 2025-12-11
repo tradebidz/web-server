@@ -1,7 +1,8 @@
-import { IsEmail, IsNotEmpty, MinLength, IsString } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class RegisterDto {
   @IsEmail()
+  @IsNotEmpty()
   email: string;
 
   @IsNotEmpty()
@@ -10,6 +11,9 @@ export class RegisterDto {
 
   @IsNotEmpty()
   full_name: string;
+
+  @IsOptional()
+  recaptcha_token?: string;
 }
 
 export class LoginDto {

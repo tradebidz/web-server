@@ -37,6 +37,12 @@ export class UsersService {
                 id: true,
                 email: true,
                 full_name: true,
+                address: true,
+                role: true,
+                rating_score: true,
+                rating_count: true,
+                is_verified: true,
+                created_at: true,
                 updated_at: true,
             }
         });

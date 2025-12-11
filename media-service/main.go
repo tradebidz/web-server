@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -15,6 +17,7 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -73,6 +76,8 @@ func main() {
 		})
 	})
 
+	go startEmailWorker()
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -111,4 +116,118 @@ func uploadBufferToSupabase(body io.Reader, filename string, contentType string)
 
 	publicUrl := fmt.Sprintf("%s/storage/v1/object/%s/%s", supabaseUrl, bucketName, filename)
 	return publicUrl, nil
+}
+
+func startEmailWorker() {
+	ctx := context.Background()
+	rdb := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+
+	rdb.XGroupCreateMkStream(ctx, "notification_stream", "email_workers", "$")
+
+	for {
+		streams, err := rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
+			Group:    "email_workers",
+			Consumer: "worker_1",
+			Streams:  []string{"notification_stream", ">"},
+			Count:    1,
+			Block:    0,
+		}).Result()
+
+		if err != nil {
+			continue
+		}
+
+		for _, stream := range streams {
+			for _, msg := range stream.Messages {
+				values := msg.Values
+				msgType := values["type"].(string)
+				email := values["email"].(string)
+
+				if msgType == "VERIFY_EMAIL" {
+					otp := values["otp"].(string)
+					fmt.Printf("Sending OTP %s to %s...\n", otp, email)
+
+					err := sendEmail(email, otp)
+					if err != nil {
+						fmt.Printf("Failed to send email to %s: %v\n", email, err)
+					}
+				}
+
+				rdb.XAck(ctx, "notification_stream", "email_workers", msg.ID)
+			}
+		}
+	}
+}
+
+func sendEmail(to string, otp string) error {
+	// Mailtrap API configuration
+	apiToken := os.Getenv("MAILTRAP_API_TOKEN")
+	fromEmail := os.Getenv("FROM_EMAIL")
+	fromName := os.Getenv("FROM_NAME")
+
+	// Debug: Check if token is loaded
+	if apiToken == "" {
+		return fmt.Errorf("MAILTRAP_API_TOKEN is not set in environment variables")
+	}
+	fmt.Printf("Using API token: %s...%s (length: %d)\n", apiToken[:8], apiToken[len(apiToken)-4:], len(apiToken))
+
+	if fromEmail == "" {
+		fromEmail = "hello@demomailtrap.co"
+	}
+	if fromName == "" {
+		fromName = "TradeBidz"
+	}
+
+	// Prepare email payload
+	payload := map[string]interface{}{
+		"from": map[string]string{
+			"email": fromEmail,
+			"name":  fromName,
+		},
+		"to": []map[string]string{
+			{"email": to},
+		},
+		"subject": "Email Verification - Your OTP Code",
+		"html": fmt.Sprintf(`
+			<html>
+			<body>
+				<h2>Email Verification</h2>
+				<p>Your OTP code is: <strong>%s</strong></p>
+				<p>This code will expire in 10 minutes.</p>
+				<p>If you did not request this code, please ignore this email.</p>
+			</body>
+			</html>
+		`, otp),
+		"category": "Email Verification",
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %v", err)
+	}
+
+	// Send request to Mailtrap API
+	req, err := http.NewRequest("POST", "https://send.api.mailtrap.io/api/send", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("Failed to send email to %s: %v\n", to, err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("mailtrap API error (status %d): %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	fmt.Printf("Email sent successfully to %s via Mailtrap\n", to)
+	return nil
 }
