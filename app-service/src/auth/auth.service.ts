@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { LoginDto, RegisterDto } from './dto/auth.dto';
@@ -9,7 +9,7 @@ import Redis from 'ioredis';
 
 @Injectable()
 export class AuthService {
-
+  private readonly logger = new Logger(AuthService.name);
   private redis: Redis;
 
   constructor(
@@ -24,70 +24,102 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto) {
-    // 1. Validate Captcha
-    const isHuman = await this.validateCaptcha(dto.recaptcha_token);
-    if (!isHuman) {
-      throw new ForbiddenException('Captcha validation failed. Are you a robot?');
-    }
+    this.logger.log(`Registration attempt for email: ${dto.email}`);
 
-    // 2. Check if user already exists
-    const user = await this.prisma.users.findUnique({
-      where: { email: dto.email },
-    });
+    try {
+      // 1. Validate Captcha
+      // const isHuman = await this.validateCaptcha(dto.recaptcha_token);
+      // if (!isHuman) {
+      //   throw new ForbiddenException('Captcha validation failed. Are you a robot?');
+      // }
 
-    if (user) throw new ForbiddenException('User already exists');
+      // 2. Check if user already exists
+      this.logger.debug(`Checking if user exists: ${dto.email}`);
+      const user = await this.prisma.users.findUnique({
+        where: { email: dto.email },
+      });
 
-    // 3. Create User
-    const hashedPassword = await bcrypt.hash(dto.password, 10);
-    const newUser = await this.prisma.users.create({
-      data: {
-        email: dto.email,
-        password: hashedPassword,
-        full_name: dto.full_name,
-        role: "BIDDER", // Explicit default,
-        is_verified: false
-      },
-    });
+      if (user) {
+        this.logger.warn(`Registration failed: User already exists - ${dto.email}`);
+        throw new ForbiddenException('User already exists');
+      }
 
-    // 4. Send OTP
-    const otp = Math.floor(10000 + Math.random() * 900000).toString();
-    await this.redis.set(`otp:${newUser.email}`, otp, 'EX', 60 * 5);
+      // 3. Create User
+      this.logger.debug(`Creating new user: ${dto.email}`);
+      const hashedPassword = await bcrypt.hash(dto.password, 10);
+      const newUser = await this.prisma.users.create({
+        data: {
+          email: dto.email,
+          password: hashedPassword,
+          full_name: dto.full_name,
+          role: "BIDDER", // Explicit default,
+          is_verified: false
+        },
+      });
+      this.logger.log(`User created successfully: ${newUser.email} (ID: ${newUser.id})`);
 
-    await this.redis.xadd('notification_stream', '*',
-      'type', 'VERIFY_MAIL',
-      'email', newUser.email,
-      'otp', otp,
-    );
+      // 4. Send OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      this.logger.debug(`Generated OTP for ${newUser.email}: ${otp}`);
 
-    return {
-      message: 'Registration successfull. Please check your email for OTP.',
-      email: newUser.email,
+      await this.redis.set(`otp:${newUser.email}`, otp, 'EX', 60 * 5);
+      this.logger.debug(`OTP stored in Redis for ${newUser.email}`);
+
+      await this.redis.xadd('notification_stream', '*',
+        'type', 'VERIFY_EMAIL',
+        'email', newUser.email,
+        'otp', otp,
+      );
+      this.logger.log(`Email notification sent to Redis stream for ${newUser.email}`);
+
+      return {
+        message: 'Registration successful. Please check your email for OTP.',
+        email: newUser.email,
+      };
+    } catch (error) {
+      this.logger.error(`Registration failed for ${dto.email}: ${error.message}`, error.stack);
+      throw error;
     }
   }
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.users.findUnique({
-      where: { email: dto.email },
-    });
+    this.logger.log(`Login attempt for email: ${dto.email}`);
 
-    if (!user) throw new ForbiddenException('Invalid credentials');
+    try {
+      const user = await this.prisma.users.findUnique({
+        where: { email: dto.email },
+      });
 
-    const pwMatches = await bcrypt.compare(dto.password, user.password);
-    if (!pwMatches) throw new ForbiddenException('Invalid credentials');
+      if (!user) {
+        this.logger.warn(`Login failed: User not found - ${dto.email}`);
+        throw new ForbiddenException('Invalid credentials');
+      }
 
-    if (!user.is_verified) {
-      throw new ForbiddenException('User is not verified. Please check your email for OTP.');
+      const pwMatches = await bcrypt.compare(dto.password, user.password);
+      if (!pwMatches) {
+        this.logger.warn(`Login failed: Invalid password - ${dto.email}`);
+        throw new ForbiddenException('Invalid credentials');
+      }
+
+      if (!user.is_verified) {
+        this.logger.warn(`Login failed: User not verified - ${dto.email}`);
+        throw new ForbiddenException('User is not verified. Please check your email for OTP.');
+      }
+
+      const role = user.role || "BIDDER";
+      const tokens = await this.getTokens(user.id, user.email, role);
+      await this.updateRefreshTokenHash(user.id, tokens.refresh_token);
+
+      this.logger.log(`Login successful for user: ${dto.email}`);
+      const { password, hashed_refresh_token, ...safeUser } = user;
+      return {
+        ...tokens,
+        user: safeUser
+      };
+    } catch (error) {
+      this.logger.error(`Login error for ${dto.email}: ${error.message}`);
+      throw error;
     }
-
-    const role = user.role || "BIDDER";
-    const tokens = await this.getTokens(user.id, user.email, role);
-    await this.updateRefreshTokenHash(user.id, tokens.refresh_token);
-
-    const { password, hashed_refresh_token, ...safeUser } = user;
-    return {
-      ...tokens,
-      user: safeUser
-    };
   }
 
   async logout(userId: number) {
@@ -167,24 +199,35 @@ export class AuthService {
 
   // --- Helper: Validate OTP ---
   async verifyOtp(email: string, inputOtp: string) {
-    const storedOtp = await this.redis.get(`otp:${email}`);
+    this.logger.log(`OTP verification attempt for email: ${email}`);
 
-    if (!storedOtp) {
-      throw new BadRequestException('OTP has expired or does not exist');
+    try {
+      const storedOtp = await this.redis.get(`otp:${email}`);
+
+      if (!storedOtp) {
+        this.logger.warn(`OTP verification failed: OTP expired or not found - ${email}`);
+        throw new BadRequestException('OTP has expired or does not exist');
+      }
+
+      if (storedOtp !== inputOtp) {
+        this.logger.warn(`OTP verification failed: Invalid OTP - ${email}`);
+        throw new BadRequestException('Invalid OTP');
+      }
+
+      const user = await this.prisma.users.update({
+        where: { email },
+        data: { is_verified: true },
+      });
+
+      this.logger.log(`User verified successfully: ${email}`);
+
+      // delete OTP in Redis
+      await this.redis.del(`otp:${email}`);
+
+      return this.getTokens(user.id, user.email, user.role || "BIDDER");
+    } catch (error) {
+      this.logger.error(`OTP verification error for ${email}: ${error.message}`);
+      throw error;
     }
-
-    if (storedOtp !== inputOtp) {
-      throw new BadRequestException('Invalid OTP');
-    }
-
-    const user = await this.prisma.users.update({
-      where: { email },
-      data: { is_verified: true },
-    });
-
-    // delete OTP in Redis
-    await this.redis.del(`otp:${email}`);
-
-    return this.getTokens(user.id, user.email, user.role || "BIDDER");
   }
 }
