@@ -12,5 +12,9 @@ export class FilterProductDto {
     search?: string;
 
     @IsOptional()
+    @IsString()
+    sort?: string;
+
+    @IsOptional()
     category_id?: string;
 }
