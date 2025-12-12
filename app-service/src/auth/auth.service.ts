@@ -153,6 +153,60 @@ export class AuthService {
     };
   }
 
+  async resendOTP(email: string) {
+    this.logger.log(`OTP resend request for email: ${email}`);
+    const COOLDOWN_SECONDS = 60;
+    const cooldownKey = `otp_cooldown:${email}`;
+
+    try {
+      // Check cooldown to prevent spamming
+      const cooldownRemaining = await this.redis.ttl(cooldownKey);
+      if (cooldownRemaining > 0) {
+        this.logger.warn(`OTP resend blocked: Cooldown active for ${email}, ${cooldownRemaining}s remaining`);
+        throw new BadRequestException(`Please wait ${cooldownRemaining} seconds before requesting a new OTP`);
+      }
+
+      const user = await this.prisma.users.findUnique({
+        where: { email },
+      });
+
+      if (!user) {
+        this.logger.warn(`OTP resend failed: User not found - ${email}`);
+        throw new BadRequestException('User not found');
+      }
+
+      if (user.is_verified) {
+        this.logger.warn(`OTP resend failed: User already verified - ${email}`);
+        throw new BadRequestException('User is already verified');
+      }
+
+      // Generate new OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      this.logger.debug(`Generated new OTP for ${email}: ${otp}`);
+
+      await this.redis.set(`otp:${email}`, otp, 'EX', 60 * 5);
+      this.logger.debug(`OTP stored in Redis for ${email}`);
+
+      await this.redis.set(cooldownKey, '1', 'EX', COOLDOWN_SECONDS);
+      this.logger.debug(`Cooldown set for ${email}: ${COOLDOWN_SECONDS}s`);
+
+      await this.redis.xadd('notification_stream', '*',
+        'type', 'VERIFY_EMAIL',
+        'email', email,
+        'otp', otp,
+      );
+      this.logger.log(`OTP resent successfully to ${email}`);
+
+      return {
+        message: 'OTP has been resent. Please check your email.',
+        email: email,
+      };
+    } catch (error) {
+      this.logger.error(`OTP resend error for ${email}: ${error.message}`);
+      throw error;
+    }
+  }
+
   // --- Helper: Validate Captcha with Google ---
   async validateCaptcha(token: string): Promise<boolean> {
     if (!token) return false;

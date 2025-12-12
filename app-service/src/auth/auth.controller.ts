@@ -11,6 +11,7 @@ import { AuthService } from './auth.service';
 import { LoginDto, RegisterDto } from './dto/auth.dto';
 import { AtGuard, RtGuard } from './guard';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { ResendOtpDto } from './dto/resend-otp.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -49,5 +50,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.authService.verifyOtp(dto.email, dto.otp);
+  }
+
+  @Post('resend-otp')
+  @HttpCode(HttpStatus.OK)
+  resendOtp(@Body() dto: ResendOtpDto) {
+    return this.authService.resendOTP(dto.email);
   }
 }
