@@ -70,8 +70,13 @@ export class ProductsService {
     }
 
     const products = await this.prisma.$queryRaw`
-      SELECT p.*, u.full_name as bidder_name,
-        (SELECT COUNT(*) FROM bids b WHERE b.product_id = p.id) as bid_count,
+      SELECT 
+        p.id, p.seller_id, p.category_id, p.name, p.thumbnail, p.description,
+        p.start_price, p.current_price, p.step_price, p.buy_now_price,
+        p.start_time, p.end_time, p.is_auto_extend, p.status, p.winner_id,
+        p.view_count, p.created_at, p.updated_at,
+        u.full_name as bidder_name,
+        (SELECT COUNT(*)::int FROM bids b WHERE b.product_id = p.id) as bid_count,
         (CASE WHEN p.created_at > ${timeThreshold} THEN true ELSE false END) as is_new
       FROM products p
       LEFT JOIN users u ON p.winner_id = u.id

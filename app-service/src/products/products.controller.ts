@@ -13,6 +13,15 @@ export class ProductsController {
     return this.productsService.findAll(query);
   }
 
+  @Get('top-ending')
+  getTopEnding() { return this.productsService.getTopEnding(); }
+
+  @Get('top-bidding')
+  getTopBidding() { return this.productsService.getTopBidding(); }
+
+  @Get('top-price')
+  getTopPrice() { return this.productsService.getTopPrice(); }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.productsService.findOne(id);
@@ -23,13 +32,4 @@ export class ProductsController {
   create(@Req() req: any, @Body() dto: CreateProductDto) {
     return this.productsService.createProduct(req.user.id, dto);
   }
-
-  @Get('top-ending')
-  getTopEnding() { return this.productsService.getTopEnding(); }
-
-  @Get('top-bidding')
-  getTopBidding() { return this.productsService.getTopBidding(); }
-
-  @Get('top-price')
-  getTopPrice() { return this.productsService.getTopPrice(); }
 }
