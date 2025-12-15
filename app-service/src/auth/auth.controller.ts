@@ -12,6 +12,9 @@ import { LoginDto, RegisterDto } from './dto/auth.dto';
 import { AtGuard, RtGuard } from './guard';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
+import { RequestResetPasswordDto } from './dto/request-reset-password.dto';
+import { VerifyResetOtpDto } from './dto/verify-reset-otp.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -56,5 +59,23 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   resendOtp(@Body() dto: ResendOtpDto) {
     return this.authService.resendOTP(dto.email);
+  }
+
+  @Post('request-reset-password')
+  @HttpCode(HttpStatus.OK)
+  requestResetPassword(@Body() dto: RequestResetPasswordDto) {
+    return this.authService.requestPasswordReset(dto.email);
+  }
+
+  @Post('verify-reset-otp')
+  @HttpCode(HttpStatus.OK)
+  verifyResetOtp(@Body() dto: VerifyResetOtpDto) {
+    return this.authService.verifyResetOtp(dto.email, dto.otp);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.email, dto.otp, dto.new_password);
   }
 }
