@@ -284,4 +284,138 @@ export class AuthService {
       throw error;
     }
   }
+
+  // --- Password Reset: Request ---
+  async requestPasswordReset(email: string) {
+    this.logger.log(`Password reset request for email: ${email}`);
+    const COOLDOWN_SECONDS = 60;
+    const cooldownKey = `reset_otp_cooldown:${email}`;
+
+    try {
+      // Check cooldown to prevent spamming
+      const cooldownRemaining = await this.redis.ttl(cooldownKey);
+      if (cooldownRemaining > 0) {
+        this.logger.warn(`Password reset blocked: Cooldown active for ${email}, ${cooldownRemaining}s remaining`);
+        throw new BadRequestException(`Please wait ${cooldownRemaining} seconds before requesting a new reset OTP`);
+      }
+
+      const user = await this.prisma.users.findUnique({
+        where: { email },
+      });
+
+      if (!user) {
+        this.logger.warn(`Password reset failed: User not found - ${email}`);
+        throw new BadRequestException('User not found');
+      }
+
+      // Generate reset OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      this.logger.debug(`Generated reset OTP for ${email}: ${otp}`);
+
+      await this.redis.set(`reset_otp:${email}`, otp, 'EX', 60 * 10); // 10 minutes expiry
+      this.logger.debug(`Reset OTP stored in Redis for ${email}`);
+
+      await this.redis.set(cooldownKey, '1', 'EX', COOLDOWN_SECONDS);
+      this.logger.debug(`Cooldown set for ${email}: ${COOLDOWN_SECONDS}s`);
+
+      await this.redis.xadd('notification_stream', '*',
+        'type', 'RESET_PASSWORD',
+        'email', email,
+        'otp', otp,
+      );
+      this.logger.log(`Password reset OTP sent to ${email}`);
+
+      return {
+        message: 'Password reset OTP has been sent to your email.',
+        email: email,
+      };
+    } catch (error) {
+      this.logger.error(`Password reset request error for ${email}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // --- Password Reset: Verify OTP ---
+  async verifyResetOtp(email: string, inputOtp: string) {
+    this.logger.log(`Reset OTP verification attempt for email: ${email}`);
+
+    try {
+      const storedOtp = await this.redis.get(`reset_otp:${email}`);
+
+      if (!storedOtp) {
+        this.logger.warn(`Reset OTP verification failed: OTP expired or not found - ${email}`);
+        throw new BadRequestException('Reset OTP has expired or does not exist');
+      }
+
+      if (storedOtp !== inputOtp) {
+        this.logger.warn(`Reset OTP verification failed: Invalid OTP - ${email}`);
+        throw new BadRequestException('Invalid reset OTP');
+      }
+
+      this.logger.log(`Reset OTP verified successfully: ${email}`);
+
+      // Generate a temporary token for password reset (valid for 5 minutes)
+      const resetToken = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      await this.redis.set(`reset_token:${email}`, resetToken, 'EX', 60 * 5);
+
+      return {
+        message: 'OTP verified successfully. You can now reset your password.',
+        reset_token: resetToken,
+      };
+    } catch (error) {
+      this.logger.error(`Reset OTP verification error for ${email}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // --- Password Reset: Complete ---
+  async resetPassword(email: string, otp: string, newPassword: string) {
+    this.logger.log(`Password reset attempt for email: ${email}`);
+
+    try {
+      const storedOtp = await this.redis.get(`reset_otp:${email}`);
+
+      if (!storedOtp) {
+        this.logger.warn(`Password reset failed: OTP expired or not found - ${email}`);
+        throw new BadRequestException('Reset OTP has expired or does not exist');
+      }
+
+      if (storedOtp !== otp) {
+        this.logger.warn(`Password reset failed: Invalid OTP - ${email}`);
+        throw new BadRequestException('Invalid reset OTP');
+      }
+
+      const user = await this.prisma.users.findUnique({
+        where: { email },
+      });
+
+      if (!user) {
+        this.logger.warn(`Password reset failed: User not found - ${email}`);
+        throw new BadRequestException('User not found');
+      }
+
+      // Hash new password
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      // Update password
+      await this.prisma.users.update({
+        where: { email },
+        data: { password: hashedPassword },
+      });
+
+      this.logger.log(`Password reset successfully for: ${email}`);
+
+      // Delete reset OTP and token from Redis
+      await this.redis.del(`reset_otp:${email}`);
+      await this.redis.del(`reset_token:${email}`);
+      await this.redis.del(`reset_otp_cooldown:${email}`);
+
+      return {
+        message: 'Password has been reset successfully. Please login with your new password.',
+      };
+    } catch (error) {
+      this.logger.error(`Password reset error for ${email}: ${error.message}`);
+      throw error;
+    }
+  }
 }
