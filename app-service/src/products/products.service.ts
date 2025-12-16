@@ -6,13 +6,18 @@ import { Prisma } from '@prisma/client';
 import Redis from 'ioredis';
 import { ConfigService } from '@nestjs/config';
 import { BanBidderDto } from './dto/ban-bidder.dto';
+import { NotificationService } from 'src/notification/notification.service';
 
 @Injectable()
 export class ProductsService {
 
   private redis: Redis;
 
-  constructor(private prisma: PrismaService, private config: ConfigService) {
+  constructor(
+    private prisma: PrismaService,
+    private config: ConfigService,
+    private notificationService: NotificationService,
+  ) {
     this.redis = new Redis({
       host: this.config.get('REDIS_HOST') || 'localhost',
       port: this.config.get('REDIS_PORT') || 6379,
@@ -269,13 +274,12 @@ export class ProductsService {
 
     const productLink = `http://localhost:5173/products/${productId}`;
 
-    await this.redis.xadd('notification_stream', '*',
-      'type', 'NEW_QUESTION',
-      'email', sellerEmail,
-      'subject', `New question for product: ${productName}`,
-      'content', `You have new question: "${content}". <br> <a href="${productLink}">Reply now</a>`,
-      'created_at', new Date().toISOString(),
-    )
+    await this.notificationService.sendNewQuestionEmail(
+      productName,
+      sellerEmail,
+      content,
+      productLink,
+    );
   }
 
   async appendDescription(userId: number, productId: number, content: string) {
@@ -295,6 +299,12 @@ export class ProductsService {
     const product = await this.prisma.products.findUnique({ where: { id: productId } });
 
     if (product?.seller_id !== sellerId) throw new ForbiddenException("Only seller can ban bidder");
+
+    // Get bidder email before banning
+    const bidder = await this.prisma.users.findUnique({
+      where: { id: dto.bidderId },
+      select: { email: true }
+    });
 
     await this.prisma.banned_bidders.create({
       data: {
@@ -334,6 +344,15 @@ export class ProductsService {
       });
     }
 
+    // Send rejection email
+    if (bidder?.email) {
+      await this.notificationService.sendBidRejectedEmail(
+        product.name,
+        bidder.email,
+        dto.reason,
+      );
+    }
+
     return { message: 'Bidder banned successfully' };
   }
 
@@ -347,12 +366,37 @@ export class ProductsService {
       throw new ForbiddenException("Only seller can answer question");
     }
 
-    return this.prisma.product_questions.update({
+    const updatedQuestion = await this.prisma.product_questions.update({
       where: { id: questionId },
       data: {
         answer: answer,
         answered_at: new Date()
       }
     });
+
+    // Get all bidders' emails for this product
+    const bidders = await this.prisma.bids.findMany({
+      where: {
+        product_id: question.product_id,
+        status: 'VALID'
+      },
+      include: { users: { select: { email: true } } },
+      distinct: ['bidder_id']
+    });
+
+    const bidderEmails = bidders
+      .map(bid => bid.users?.email)
+      .filter((email): email is string => email !== null && email !== undefined);
+
+    if (bidderEmails.length > 0) {
+      await this.notificationService.sendNewAnswerEmail(
+        question.products?.name || 'Product',
+        question.question,
+        answer,
+        bidderEmails,
+      );
+    }
+
+    return updatedQuestion;
   }
 }

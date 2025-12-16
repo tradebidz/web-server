@@ -3,9 +3,11 @@ package com.tradebidz.core_service.core.service;
 import com.tradebidz.core_service.core.dto.BidRequest;
 import com.tradebidz.core_service.core.entity.Bid;
 import com.tradebidz.core_service.core.entity.Product;
+import com.tradebidz.core_service.core.entity.User;
 import com.tradebidz.core_service.core.enums.BidStatus;
 import com.tradebidz.core_service.core.repository.BidRepository;
 import com.tradebidz.core_service.core.repository.ProductRepository;
+import com.tradebidz.core_service.core.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -24,6 +26,8 @@ public class BiddingService {
 
     private final ProductRepository productRepo;
     private final BidRepository bidRepo;
+    private final UserRepository userRepo;
+    private final NotificationService notificationService;
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
 
@@ -68,6 +72,9 @@ public class BiddingService {
 
         bidRepo.save(newBid);
 
+        // Store previous winner ID for email notification
+        Integer previousWinnerId = product.getWinnerId();
+
         // update product price
         product.setCurrentPrice(newBid.getAmount());
         product.setWinnerId(userId);
@@ -77,6 +84,40 @@ public class BiddingService {
         Optional<Bid> opponentBidOpt = bidRepo.findTopByProductIdOrderByAmountDesc(product.getId());
         productRepo.save(product);
         sendUpdateToRedis(product, userId);
+
+        // Send email notifications
+        sendBidPlacedEmailNotification(product, userId, previousWinnerId);
+    }
+
+    private void sendBidPlacedEmailNotification(Product product, Integer newBidderId, Integer prevBidderId) {
+        try {
+            // Fetch seller email
+            User seller = userRepo.findById(product.getSellerId()).orElse(null);
+            if (seller == null) return;
+
+            // Fetch new bidder email
+            User newBidder = userRepo.findById(newBidderId).orElse(null);
+            if (newBidder == null) return;
+
+            // Fetch previous bidder email (if exists)
+            String prevBidderEmail = "";
+            if (prevBidderId != null && !prevBidderId.equals(newBidderId)) {
+                User prevBidder = userRepo.findById(prevBidderId).orElse(null);
+                if (prevBidder != null) {
+                    prevBidderEmail = prevBidder.getEmail();
+                }
+            }
+
+            notificationService.sendBidPlacedEmail(
+                    product.getName(),
+                    product.getCurrentPrice().toString(),
+                    seller.getEmail(),
+                    newBidder.getEmail(),
+                    prevBidderEmail
+            );
+        } catch (Exception e) {
+            System.err.println("Failed to send bid placed notification: " + e.getMessage());
+        }
     }
 
     private void sendUpdateToRedis(Product product, Integer userId) {

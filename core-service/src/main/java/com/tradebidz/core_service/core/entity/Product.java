@@ -38,4 +38,6 @@ public class Product {
 
     @Column(name = "winner_id")
     private Integer winnerId;
+
+    private String name;
 }

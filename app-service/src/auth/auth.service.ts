@@ -6,6 +6,11 @@ import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import Redis from 'ioredis';
+<<<<<<< Updated upstream
+=======
+import { OAuth2Client } from 'google-auth-library';
+import { NotificationService } from 'src/notification/notification.service';
+>>>>>>> Stashed changes
 
 @Injectable()
 export class AuthService {
@@ -16,6 +21,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwt: JwtService,
     private config: ConfigService,
+    private notificationService: NotificationService,
   ) {
     this.redis = new Redis({
       host: this.config.get('REDIS_HOST') || 'localhost',
@@ -65,11 +71,7 @@ export class AuthService {
       await this.redis.set(`otp:${newUser.email}`, otp, 'EX', 60 * 5);
       this.logger.debug(`OTP stored in Redis for ${newUser.email}`);
 
-      await this.redis.xadd('notification_stream', '*',
-        'type', 'VERIFY_EMAIL',
-        'email', newUser.email,
-        'otp', otp,
-      );
+      await this.notificationService.sendVerifyEmailOtp(newUser.email, otp);
       this.logger.log(`Email notification sent to Redis stream for ${newUser.email}`);
 
       return {
@@ -190,11 +192,7 @@ export class AuthService {
       await this.redis.set(cooldownKey, '1', 'EX', COOLDOWN_SECONDS);
       this.logger.debug(`Cooldown set for ${email}: ${COOLDOWN_SECONDS}s`);
 
-      await this.redis.xadd('notification_stream', '*',
-        'type', 'VERIFY_EMAIL',
-        'email', email,
-        'otp', otp,
-      );
+      await this.notificationService.sendVerifyEmailOtp(email, otp);
       this.logger.log(`OTP resent successfully to ${email}`);
 
       return {
@@ -318,11 +316,7 @@ export class AuthService {
       await this.redis.set(cooldownKey, '1', 'EX', COOLDOWN_SECONDS);
       this.logger.debug(`Cooldown set for ${email}: ${COOLDOWN_SECONDS}s`);
 
-      await this.redis.xadd('notification_stream', '*',
-        'type', 'RESET_PASSWORD',
-        'email', email,
-        'otp', otp,
-      );
+      await this.notificationService.sendResetPasswordOtp(email, otp);
       this.logger.log(`Password reset OTP sent to ${email}`);
 
       return {
