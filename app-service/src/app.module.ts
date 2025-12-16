@@ -9,11 +9,13 @@ import { ProductsModule } from './products/products.module';
 import { BiddingModule } from './bidding/bidding.module';
 import { CategoriesModule } from './categories/categories.module';
 import { AdminModule } from './admin/admin.module';
+import { NotificationModule } from './notification/notification.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    NotificationModule,
     AuthModule,
     AdminModule,
     UsersModule,
