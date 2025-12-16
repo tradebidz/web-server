@@ -1,0 +1,336 @@
+{
+    "info": {
+        "name": "WNC Auction - Part 2 (Bidder)",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "0. Login (Get Token)",
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "exec": [
+                            "var jsonData = pm.response.json();",
+                            "if (jsonData.access_token) {",
+                            "    pm.environment.set(\"access_token\", jsonData.access_token);",
+                            "    console.log(\"Token updated\");",
+                            "}",
+                            ""
+                        ],
+                        "type": "text/javascript"
+                    }
+                }
+            ],
+            "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"email\": \"test@gmail.com\",\n    \"password\": \"123456\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{base_url}}/auth/login",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "auth",
+                        "login"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "2.1 Add to Watchlist",
+            "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"productId\": 1\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{base_url}}/users/watchlist",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "users",
+                        "watchlist"
+                    ]
+                },
+                "description": "Thêm/Xóa sản phẩm khỏi danh sách yêu thích"
+            },
+            "response": []
+        },
+        {
+            "name": "2.1 Get My Watchlist",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/users/watchlist",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "users",
+                        "watchlist"
+                    ]
+                }
+            },
+            "response": []
+        },
+        {
+            "name": "2.2 Validate Bid Eligibility",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/products/1/validate-bid",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "products",
+                        "1",
+                        "validate-bid"
+                    ]
+                },
+                "description": "Kiểm tra xem User có đủ điểm uy tín (80%) để bid không"
+            },
+            "response": []
+        },
+        {
+            "name": "2.2 Get Suggested Price",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/products/1/suggested-price",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "products",
+                        "1",
+                        "suggested-price"
+                    ]
+                }
+            },
+            "response": []
+        },
+        {
+            "name": "2.3 Get History (Masked Name)",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/products/1/history",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "products",
+                        "1",
+                        "history"
+                    ]
+                },
+                "description": "Xem lịch sử đấu giá (Tên bị che ****)"
+            },
+            "response": []
+        },
+        {
+            "name": "2.4 Ask Question",
+            "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"content\": \"Sản phẩm này còn bảo hành không shop?\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{base_url}}/products/1/questions",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "products",
+                        "1",
+                        "questions"
+                    ]
+                },
+                "description": "Gửi câu hỏi cho Seller (Kích hoạt gửi Email qua Redis)"
+            },
+            "response": []
+        },
+        {
+            "name": "2.5 Update Profile",
+            "request": {
+                "method": "PATCH",
+                "header": [],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"full_name\": \"Nguyen Van Bidder\",\n    \"address\": \"123 Ho Chi Minh City\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{base_url}}/users/profile",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "users",
+                        "profile"
+                    ]
+                }
+            },
+            "response": []
+        },
+        {
+            "name": "2.5 Get Active Bids",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/users/bids/active",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "users",
+                        "bids",
+                        "active"
+                    ]
+                },
+                "description": "Xem các sản phẩm mình đang tham gia đấu giá"
+            },
+            "response": []
+        },
+        {
+            "name": "2.5 Get Won Products",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/users/bids/won",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "users",
+                        "bids",
+                        "won"
+                    ]
+                },
+                "description": "Xem danh sách sản phẩm đã thắng"
+            },
+            "response": []
+        },
+        {
+            "name": "2.5 Rate Seller",
+            "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"productId\": 1,\n    \"score\": 1,\n    \"comment\": \"Người bán rất uy tín, giao hàng nhanh!\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{base_url}}/users/rate",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "users",
+                        "rate"
+                    ]
+                },
+                "description": "Lưu ý: API này sẽ lỗi 403 nếu bạn không phải Winner của sản phẩm này"
+            },
+            "response": []
+        },
+        {
+            "name": "2.6 Request Upgrade Seller",
+            "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"reason\": \"Tôi muốn bán các sản phẩm điện tử cũ của mình. Mong admin duyệt.\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{base_url}}/users/upgrade",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "users",
+                        "upgrade"
+                    ]
+                }
+            },
+            "response": []
+        }
+    ],
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            {
+                "key": "token",
+                "value": "{{access_token}}",
+                "type": "string"
+            }
+        ]
+    },
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    ""
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    ""
+                ]
+            }
+        }
+    ]
+}
