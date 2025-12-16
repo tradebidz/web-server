@@ -14,6 +14,10 @@ export class UpdateProfileDto {
     address?: string;
 
     @IsOptional()
+    @IsString()
+    dob?: string;
+
+    @IsOptional()
     @MinLength(6, { message: 'Password must be at least 6 characters' })
     password?: string;
 

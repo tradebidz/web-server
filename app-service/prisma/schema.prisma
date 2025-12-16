@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model banned_bidders {
@@ -149,6 +148,7 @@ model users {
   email                                          String              @unique @db.VarChar(255)
   password                                       String              @db.VarChar(255)
   full_name                                      String              @db.VarChar(255)
+  dob                                            DateTime?           @db.Date
   address                                        String?
   role                                           user_role?          @default(BIDDER)
   rating_score                                   Float?              @default(0)

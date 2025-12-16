@@ -1,0 +1,946 @@
+{
+    "info": {
+        "name": "WNC Auction - Part 5 (User Authentication)",
+        "description": "Comprehensive authentication and user profile management API tests",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "5.1 Login",
+            "item": [
+                {
+                    "name": "5.1.1 Register User",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 201\", function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Response contains email\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.email).to.exist;",
+                                    "    pm.environment.set(\"test_email\", jsonData.email);",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"user{{$timestamp}}@test.com\",\n    \"password\": \"Test@123\",\n    \"full_name\": \"Test User\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/register",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "register"
+                            ]
+                        },
+                        "description": "5.1 - Register new user account. Sends OTP to email for verification."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.1.2 Resend OTP",
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"{{test_email}}\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/resend-otp",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "resend-otp"
+                            ]
+                        },
+                        "description": "5.1 - Resend OTP to user email. Has cooldown period of 60 seconds."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.1.3 Verify OTP",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Tokens received\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.access_token).to.exist;",
+                                    "    pm.expect(jsonData.refresh_token).to.exist;",
+                                    "    pm.environment.set(\"access_token\", jsonData.access_token);",
+                                    "    pm.environment.set(\"refresh_token\", jsonData.refresh_token);",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"{{test_email}}\",\n    \"otp\": \"123456\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/verify-otp",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "verify-otp"
+                            ]
+                        },
+                        "description": "5.1 - Verify OTP to activate account. Returns access and refresh tokens."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.1.4 Login with Email/Password",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Login successful - tokens received\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.access_token).to.exist;",
+                                    "    pm.expect(jsonData.refresh_token).to.exist;",
+                                    "    pm.expect(jsonData.user).to.exist;",
+                                    "    pm.environment.set(\"access_token\", jsonData.access_token);",
+                                    "    pm.environment.set(\"refresh_token\", jsonData.refresh_token);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Password is encrypted with bcrypt\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.user.password).to.not.exist;",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"bidder@example.com\",\n    \"password\": \"123456\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "description": "5.1 & 5.3 - Login with email and password. Password is verified against bcrypt hash."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.1.5 Login with Google OAuth",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200 or 201\", function () {",
+                                    "    pm.expect([200, 201]).to.include(pm.response.code);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Google OAuth login successful\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.access_token).to.exist;",
+                                    "    pm.expect(jsonData.refresh_token).to.exist;",
+                                    "    pm.expect(jsonData.user).to.exist;",
+                                    "    pm.expect(jsonData.user.is_verified).to.be.true;",
+                                    "    pm.environment.set(\"access_token\", jsonData.access_token);",
+                                    "    pm.environment.set(\"refresh_token\", jsonData.refresh_token);",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"token\": \"YOUR_GOOGLE_ID_TOKEN_HERE\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/google-login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "google-login"
+                            ]
+                        },
+                        "description": "5.1 - Login with Google OAuth. Frontend gets id_token from Google OAuth SDK and sends it here. Backend verifies token and creates/logs in user."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.1.6 Refresh Access Token",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"New tokens received\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.access_token).to.exist;",
+                                    "    pm.expect(jsonData.refresh_token).to.exist;",
+                                    "    pm.environment.set(\"access_token\", jsonData.access_token);",
+                                    "    pm.environment.set(\"refresh_token\", jsonData.refresh_token);",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{refresh_token}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/auth/refresh",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "refresh"
+                            ]
+                        },
+                        "description": "5.1 - Refresh access token using refresh token"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.1.7 Logout",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Logout successful\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.message).to.include('successfully');",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{access_token}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "POST",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/auth/logout",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "logout"
+                            ]
+                        },
+                        "description": "5.1 - Logout and invalidate refresh token"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "5.2 Update Personal Information",
+            "item": [
+                {
+                    "name": "5.2.1 Get My Profile",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Profile contains required fields\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.email).to.exist;",
+                                    "    pm.expect(jsonData.full_name).to.exist;",
+                                    "    pm.expect(jsonData.password).to.not.exist;",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{access_token}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/users/me",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "users",
+                                "me"
+                            ]
+                        },
+                        "description": "5.2 - Get current user's profile information"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.2.2 Update Full Name",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Full name updated\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.full_name).to.equal('John Doe Updated');",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{access_token}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "PATCH",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"full_name\": \"John Doe Updated\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/users/profile",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "users",
+                                "profile"
+                            ]
+                        },
+                        "description": "5.2 - Update user's full name"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.2.3 Update Email",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Email updated\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.email).to.exist;",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{access_token}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "PATCH",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"newemail@example.com\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/users/profile",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "users",
+                                "profile"
+                            ]
+                        },
+                        "description": "5.2 - Update user's contact email"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.2.4 Update Date of Birth",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"DOB updated\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.dob).to.exist;",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{access_token}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "PATCH",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"dob\": \"1990-01-15\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/users/profile",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "users",
+                                "profile"
+                            ]
+                        },
+                        "description": "5.2 - Update user's date of birth"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.2.5 Update Multiple Fields",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"All fields updated\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.full_name).to.exist;",
+                                    "    pm.expect(jsonData.email).to.exist;",
+                                    "    pm.expect(jsonData.address).to.exist;",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{access_token}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "PATCH",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"full_name\": \"Complete Name\",\n    \"email\": \"complete@example.com\",\n    \"dob\": \"1995-06-20\",\n    \"address\": \"123 Main Street, City, Country\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/users/profile",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "users",
+                                "profile"
+                            ]
+                        },
+                        "description": "5.2 - Update multiple fields at once (full_name, email, dob, address)"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "5.3 Change Password",
+            "item": [
+                {
+                    "name": "5.3.1 Change Password",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Password changed successfully\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.password).to.not.exist;",
+                                    "    console.log('Password encrypted with bcrypt and updated');",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "auth": {
+                            "type": "bearer",
+                            "bearer": [
+                                {
+                                    "key": "token",
+                                    "value": "{{access_token}}",
+                                    "type": "string"
+                                }
+                            ]
+                        },
+                        "method": "PATCH",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"old_password\": \"oldPassword123\",\n    \"password\": \"newPassword456\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/users/profile",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "users",
+                                "profile"
+                            ]
+                        },
+                        "description": "5.3 - Change user password. Password is encrypted using bcrypt (10 rounds) before storing."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.3.2 Verify New Password Works",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Login with new password successful\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.access_token).to.exist;",
+                                    "    console.log('Bcrypt password verification successful');",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"bidder@example.com\",\n    \"password\": \"newPassword456\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "description": "5.3 - Verify that login works with the new password (bcrypt comparison)"
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "5.4 Forgot Password",
+            "item": [
+                {
+                    "name": "5.4.1 Request Password Reset",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Reset OTP sent\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.message).to.include('OTP');",
+                                    "    pm.expect(jsonData.email).to.exist;",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"bidder@example.com\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/request-reset-password",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "request-reset-password"
+                            ]
+                        },
+                        "description": "5.4 - Request password reset. Sends OTP to user's email. OTP expires in 10 minutes, cooldown of 60 seconds."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.4.2 Verify Reset OTP",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"OTP verified - reset token received\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.reset_token).to.exist;",
+                                    "    pm.environment.set(\"reset_token\", jsonData.reset_token);",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"bidder@example.com\",\n    \"otp\": \"123456\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/verify-reset-otp",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "verify-reset-otp"
+                            ]
+                        },
+                        "description": "5.4 - Verify the reset OTP sent to email. Returns a temporary reset token valid for 5 minutes."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.4.3 Reset Password with OTP",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "",
+                                    "pm.test(\"Password reset successful\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.message).to.include('successfully');",
+                                    "    console.log('Password reset and encrypted with bcrypt');",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"bidder@example.com\",\n    \"otp\": \"123456\",\n    \"new_password\": \"ResetPassword@123\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/reset-password",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "reset-password"
+                            ]
+                        },
+                        "description": "5.4 - Reset password using email and OTP. New password is hashed with bcrypt before storing."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "5.4.4 Login with New Password",
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "exec": [
+                                    "pm.test(\"Login successful with reset password\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData.access_token).to.exist;",
+                                    "    pm.environment.set(\"access_token\", jsonData.access_token);",
+                                    "    pm.environment.set(\"refresh_token\", jsonData.refresh_token);",
+                                    "    console.log('Password reset verified - login successful');",
+                                    "});"
+                                ],
+                                "type": "text/javascript"
+                            }
+                        }
+                    ],
+                    "request": {
+                        "method": "POST",
+                        "header": [],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n    \"email\": \"bidder@example.com\",\n    \"password\": \"ResetPassword@123\"\n}",
+                            "options": {
+                                "raw": {
+                                    "language": "json"
+                                }
+                            }
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/auth/login",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "auth",
+                                "login"
+                            ]
+                        },
+                        "description": "5.4 - Verify password reset by logging in with new password"
+                    },
+                    "response": []
+                }
+            ]
+        }
+    ],
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    ""
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    ""
+                ]
+            }
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:3000",
+            "type": "string"
+        }
+    ]
+}

@@ -13,6 +13,7 @@ import { NotificationService } from 'src/notification/notification.service';
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private redis: Redis;
+  private googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
   constructor(
     private prisma: PrismaService,
@@ -24,6 +25,50 @@ export class AuthService {
       host: this.config.get('REDIS_HOST') || 'localhost',
       port: this.config.get('REDIS_PORT') || 6379,
     });
+  }
+
+  async googleLogin(googleToken: string) {
+    const ticket = await this.googleClient.verifyIdToken({
+      idToken: googleToken,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+
+    const payload = ticket.getPayload();
+
+    const email = payload?.email;
+    const name = payload?.name;
+    const picture = payload?.picture;
+
+    if (!email || !name || !picture) {
+      throw new BadRequestException('Invalid Google token');
+    }
+
+    let user = await this.prisma.users.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      // create new user
+      user = await this.prisma.users.create({
+        data: {
+          email,
+          full_name: name,
+          password: "",
+          role: "BIDDER",
+          is_verified: true,
+        },
+      });
+    }
+
+    const role = user.role || "BIDDER";
+    const tokens = await this.getTokens(user.id, user.email, role);
+    await this.updateRefreshTokenHash(user.id, tokens.refresh_token);
+
+    const { password, hashed_refresh_token, ...safeUser } = user;
+    return {
+      ...tokens,
+      user: safeUser
+    };
   }
 
   async register(dto: RegisterDto) {

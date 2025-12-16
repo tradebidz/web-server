@@ -20,6 +20,11 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 export class AuthController {
   constructor(private authService: AuthService) { }
 
+  @Post('google-login')
+  googleLogin(@Body('token') token: string) {
+    return this.authService.googleLogin(token);
+  }
+
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);

@@ -8,11 +8,8 @@ import { UsersModule } from './users/users.module';
 import { ProductsModule } from './products/products.module';
 import { BiddingModule } from './bidding/bidding.module';
 import { CategoriesModule } from './categories/categories.module';
-<<<<<<< Updated upstream
-=======
 import { AdminModule } from './admin/admin.module';
 import { NotificationModule } from './notification/notification.module';
->>>>>>> Stashed changes
 
 @Module({
   imports: [
@@ -20,6 +17,7 @@ import { NotificationModule } from './notification/notification.module';
     PrismaModule,
     NotificationModule,
     AuthModule,
+    AdminModule,
     UsersModule,
     ProductsModule,
     BiddingModule,
