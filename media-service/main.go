@@ -146,13 +146,10 @@ func startEmailWorker() {
 				switch msgType {
 				case "VERIFY_EMAIL":
 					otp := values["otp"].(string)
-					fmt.Printf("Sending OTP %s to %s...\n", otp, email)
+					fmt.Printf("Sending verification OTP %s to %s...\n", otp, email)
 
-					err := sendEmail(email, otp)
+					err := sendVerificationEmail(email, otp)
 					if err != nil {
-<<<<<<< Updated upstream
-						fmt.Printf("Failed to send email to %s: %v\n", email, err)
-=======
 						fmt.Printf("Failed to send verification email to %s: %v\n", email, err)
 					}
 				case "RESET_PASSWORD":
@@ -162,7 +159,6 @@ func startEmailWorker() {
 					err := sendResetPasswordEmail(email, otp)
 					if err != nil {
 						fmt.Printf("Failed to send reset password email to %s: %v\n", email, err)
->>>>>>> Stashed changes
 					}
 				case "BID_PLACED":
 					productName := values["product_name"].(string)
@@ -243,7 +239,7 @@ func startEmailWorker() {
 	}
 }
 
-func sendEmail(to string, otp string) error {
+func sendVerificationEmail(to string, otp string) error {
 	// Mailtrap API configuration
 	apiToken := os.Getenv("MAILTRAP_API_TOKEN")
 	fromEmail := os.Getenv("FROM_EMAIL")
@@ -315,8 +311,6 @@ func sendEmail(to string, otp string) error {
 	fmt.Printf("Email sent successfully to %s via Mailtrap\n", to)
 	return nil
 }
-<<<<<<< Updated upstream
-=======
 
 func sendResetPasswordEmail(to string, otp string) error {
 	// Mailtrap API configuration
@@ -787,4 +781,3 @@ func sendEmailViaMailtrap(payload map[string]interface{}, apiToken string) error
 
 	return nil
 }
->>>>>>> Stashed changes

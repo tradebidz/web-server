@@ -6,11 +6,8 @@ import * as bcrypt from 'bcrypt';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import Redis from 'ioredis';
-<<<<<<< Updated upstream
-=======
 import { OAuth2Client } from 'google-auth-library';
 import { NotificationService } from 'src/notification/notification.service';
->>>>>>> Stashed changes
 
 @Injectable()
 export class AuthService {
