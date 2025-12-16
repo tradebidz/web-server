@@ -86,15 +86,48 @@ export class UsersService {
     }
 
     async updateProfile(userId: number, dto: UpdateProfileDto) {
-        const dataToUpdate: any = { ...dto };
+        const { old_password, password, ...otherFields } = dto;
+        const dataToUpdate: any = { ...otherFields };
 
-        if (dto.password) {
-            dataToUpdate.password = await bcrypt.hash(dto.password, 10);
+        // If changing password, verify old password first
+        if (password) {
+            if (!old_password) {
+                throw new BadRequestException('Old password is required to change password');
+            }
+
+            const user = await this.prisma.users.findUnique({
+                where: { id: userId },
+                select: { password: true }
+            });
+
+            if (!user) {
+                throw new NotFoundException('User not found');
+            }
+
+            const isOldPasswordValid = await bcrypt.compare(old_password, user.password);
+            if (!isOldPasswordValid) {
+                throw new BadRequestException('Old password is incorrect');
+            }
+
+            dataToUpdate.password = await bcrypt.hash(password, 10);
         }
 
         return this.prisma.users.update({
             where: { id: userId },
-            data: dataToUpdate
+            data: dataToUpdate,
+            select: {
+                id: true,
+                email: true,
+                full_name: true,
+                dob: true,
+                address: true,
+                role: true,
+                rating_score: true,
+                rating_count: true,
+                is_verified: true,
+                created_at: true,
+                updated_at: true,
+            }
         });
     }
 

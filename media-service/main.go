@@ -145,11 +145,19 @@ func startEmailWorker() {
 
 				if msgType == "VERIFY_EMAIL" {
 					otp := values["otp"].(string)
-					fmt.Printf("Sending OTP %s to %s...\n", otp, email)
+					fmt.Printf("Sending verification OTP %s to %s...\n", otp, email)
 
-					err := sendEmail(email, otp)
+					err := sendVerificationEmail(email, otp)
 					if err != nil {
-						fmt.Printf("Failed to send email to %s: %v\n", email, err)
+						fmt.Printf("Failed to send verification email to %s: %v\n", email, err)
+					}
+				} else if msgType == "RESET_PASSWORD" {
+					otp := values["otp"].(string)
+					fmt.Printf("Sending password reset OTP %s to %s...\n", otp, email)
+
+					err := sendResetPasswordEmail(email, otp)
+					if err != nil {
+						fmt.Printf("Failed to send reset password email to %s: %v\n", email, err)
 					}
 				}
 
@@ -159,7 +167,7 @@ func startEmailWorker() {
 	}
 }
 
-func sendEmail(to string, otp string) error {
+func sendVerificationEmail(to string, otp string) error {
 	// Mailtrap API configuration
 	apiToken := os.Getenv("MAILTRAP_API_TOKEN")
 	fromEmail := os.Getenv("FROM_EMAIL")
@@ -229,5 +237,78 @@ func sendEmail(to string, otp string) error {
 	}
 
 	fmt.Printf("Email sent successfully to %s via Mailtrap\n", to)
+	return nil
+}
+
+func sendResetPasswordEmail(to string, otp string) error {
+	// Mailtrap API configuration
+	apiToken := os.Getenv("MAILTRAP_API_TOKEN")
+	fromEmail := os.Getenv("FROM_EMAIL")
+	fromName := os.Getenv("FROM_NAME")
+
+	// Debug: Check if token is loaded
+	if apiToken == "" {
+		return fmt.Errorf("MAILTRAP_API_TOKEN is not set in environment variables")
+	}
+
+	if fromEmail == "" {
+		fromEmail = "hello@demomailtrap.co"
+	}
+	if fromName == "" {
+		fromName = "TradeBidz"
+	}
+
+	// Prepare email payload
+	payload := map[string]interface{}{
+		"from": map[string]string{
+			"email": fromEmail,
+			"name":  fromName,
+		},
+		"to": []map[string]string{
+			{"email": to},
+		},
+		"subject": "Password Reset - Your OTP Code",
+		"html": fmt.Sprintf(`
+			<html>
+			<body>
+				<h2>Password Reset Request</h2>
+				<p>You have requested to reset your password.</p>
+				<p>Your OTP code is: <strong>%s</strong></p>
+				<p>This code will expire in 10 minutes.</p>
+				<p>If you did not request a password reset, please ignore this email and your password will remain unchanged.</p>
+			</body>
+			</html>
+		`, otp),
+		"category": "Password Reset",
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal JSON: %v", err)
+	}
+
+	// Send request to Mailtrap API
+	req, err := http.NewRequest("POST", "https://send.api.mailtrap.io/api/send", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+apiToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("Failed to send reset password email to %s: %v\n", to, err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("mailtrap API error (status %d): %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	fmt.Printf("Password reset email sent successfully to %s via Mailtrap\n", to)
 	return nil
 }

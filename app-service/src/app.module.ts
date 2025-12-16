@@ -8,12 +8,14 @@ import { UsersModule } from './users/users.module';
 import { ProductsModule } from './products/products.module';
 import { BiddingModule } from './bidding/bidding.module';
 import { CategoriesModule } from './categories/categories.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     AuthModule,
+    AdminModule,
     UsersModule,
     ProductsModule,
     BiddingModule,
