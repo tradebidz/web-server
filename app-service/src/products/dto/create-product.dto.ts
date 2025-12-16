@@ -1,4 +1,4 @@
-import { IsArray, IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsNotEmpty, IsNumber, IsOptional, IsString, Min, ArrayMinSize } from 'class-validator';
 
 export class CreateProductDto {
     @IsNotEmpty()
@@ -6,22 +6,16 @@ export class CreateProductDto {
     name: string;
 
     @IsNotEmpty()
-    @IsString()
-    description: string;
-
-    @IsNotEmpty()
     @IsNumber()
-    @Min(0)
     category_id: number;
 
     @IsNotEmpty()
     @IsNumber()
-    @Min(1000)
+    @Min(0)
     start_price: number;
 
     @IsNotEmpty()
     @IsNumber()
-    @Min(100)
     step_price: number;
 
     @IsOptional()
@@ -29,9 +23,19 @@ export class CreateProductDto {
     buy_now_price?: number;
 
     @IsNotEmpty()
+    @IsString()
+    description: string;
+
+    @IsNotEmpty()
     @IsDateString()
     end_time: string;
+
+    @IsOptional()
+    @IsBoolean()
+    is_auto_extend?: boolean;
+
     @IsArray()
+    @ArrayMinSize(3, { message: 'Need at least 3 images' })
     @IsString({ each: true })
     images: string[];
 }

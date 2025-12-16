@@ -1,0 +1,245 @@
+{
+    "info": {
+        "name": "WNC Auction - Part 1 (Guest)",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "1.1 Menu (Categories)",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/categories",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "categories"
+                    ]
+                },
+                "description": "Lấy danh sách danh mục 2 cấp (Cha - Con)"
+            },
+            "response": []
+        },
+        {
+            "name": "1.2 Homepage - Top Ending Soon",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/products/top-ending",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "products",
+                        "top-ending"
+                    ]
+                },
+                "description": "Top 5 sản phẩm sắp kết thúc"
+            },
+            "response": []
+        },
+        {
+            "name": "1.2 Homepage - Top Bidding",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/products/top-bidding",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "products",
+                        "top-bidding"
+                    ]
+                },
+                "description": "Top 5 sản phẩm nhiều lượt bid nhất"
+            },
+            "response": []
+        },
+        {
+            "name": "1.2 Homepage - Top Price",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/products/top-price",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "products",
+                        "top-price"
+                    ]
+                },
+                "description": "Top 5 sản phẩm giá cao nhất"
+            },
+            "response": []
+        },
+        {
+            "name": "1.4 Search (Full-text)",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/products?search=dien thoai&sort=time_desc",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "products"
+                    ],
+                    "query": [
+                        {
+                            "key": "search",
+                            "value": "dien thoai",
+                            "description": "Thử gõ tiếng Việt không dấu"
+                        },
+                        {
+                            "key": "sort",
+                            "value": "time_desc",
+                            "description": "Sắp xếp thời gian giảm dần"
+                        }
+                    ]
+                }
+            },
+            "response": []
+        },
+        {
+            "name": "1.3 List by Category",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/products?category_id=1&page=1&limit=5",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "products"
+                    ],
+                    "query": [
+                        {
+                            "key": "category_id",
+                            "value": "1"
+                        },
+                        {
+                            "key": "page",
+                            "value": "1"
+                        },
+                        {
+                            "key": "limit",
+                            "value": "5"
+                        }
+                    ]
+                }
+            },
+            "response": []
+        },
+        {
+            "name": "1.5 Product Detail",
+            "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                    "raw": "{{base_url}}/products/1",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "products",
+                        "1"
+                    ]
+                },
+                "description": "Xem chi tiết + Sản phẩm liên quan + Lịch sử bid"
+            },
+            "response": []
+        },
+        {
+            "name": "1.6 Register (Step 1)",
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "exec": [
+                            "// Log email để check xem đã gửi chưa"
+                        ],
+                        "type": "text/javascript"
+                    }
+                }
+            ],
+            "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"email\": \"guest_test@gmail.com\",\n    \"password\": \"123456\",\n    \"full_name\": \"Khach Hang Moi\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{base_url}}/auth/register",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "auth",
+                        "register"
+                    ]
+                },
+                "description": "Đăng ký nhưng chưa active"
+            },
+            "response": []
+        },
+        {
+            "name": "1.6 Verify OTP (Step 2)",
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "exec": [
+                            "var jsonData = pm.response.json();",
+                            "if (jsonData.access_token) {",
+                            "    pm.environment.set(\"access_token\", jsonData.access_token);",
+                            "    pm.environment.set(\"refresh_token\", jsonData.refresh_token);",
+                            "    console.log(\"User Verified & Logged in!\");",
+                            "}"
+                        ],
+                        "type": "text/javascript"
+                    }
+                }
+            ],
+            "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n    \"email\": \"guest_test@gmail.com\",\n    \"otp\": \"123456\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                },
+                "url": {
+                    "raw": "{{base_url}}/auth/verify-otp",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "auth",
+                        "verify-otp"
+                    ]
+                },
+                "description": "Nhập OTP để active và lấy Token"
+            },
+            "response": []
+        }
+    ]
+}
