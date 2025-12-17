@@ -94,4 +94,18 @@ public class NotificationService {
             e.printStackTrace();
         }
     }
+
+    public void sendBidRejectedEmail(
+        String productName, 
+        String price, 
+        String bidderEmail
+    ) {
+        try {
+            Map<String, String> data = new HashMap<>();
+            data.put("type", "BID_REJECTED");
+            data.put("product_name", productName);
+            data.put("new_price", price);
+            data.put("bidder_email", bidderEmail);          
+        }
+    }
 }

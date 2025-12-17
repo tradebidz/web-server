@@ -36,73 +36,95 @@ public class BiddingService {
         Product product = productRepo.findByIdWithLock(req.getProductId())
                 .orElseThrow(() -> new RuntimeException("Product not found"));
 
+        if (!"ACTIVE".equals(product.getStatus().toString())) {
+            throw new RuntimeException("Product is not active");
+        }
+
         LocalDateTime now = LocalDateTime.now();
         if (now.isAfter(product.getEndTime())) {
             throw new RuntimeException("Auction ended");
         }
 
-        if (product.getIsAutoExtend() && product.getEndTime().minusMinutes(5).isBefore(now)) {
-            product.setEndTime(product.getEndTime().plusMinutes(10));
+        if (Boolean.TRUE.equals(product.getIsAutoExtend()) &&
+            product.getEndTime().minusMinutes(5).isBefore(now)) {
+            product.setEndTime(product.getEndTime().plusMinutes(5));
         }
 
-        BigDecimal minValidPrice = product.getCurrentPrice().add(product.getStepPrice());
-        if (product.getCurrentPrice().compareTo(BigDecimal.ZERO) == 0) {
-            minValidPrice = product.getStartPrice();
+        BigDecimal challengerAmount = req.getAmount();
+        BigDecimal challengerMax = Boolean.TRUE.equals(req.getIsAutoBid()) ? req.getMaxAmount() : req.getAmount();
+        BigDecimal currentPrice = product.getCurrentPrice();
+        BigDecimal stepPrice = product.getStepPrice();
+
+        BigDecimal minValidPrice = (currentPrice.compareTo(BigDecimal.ZERO) == 0)
+                    ? product.getStartPrice()
+                    : currentPrice.add(stepPrice);
+
+        if (challengerAmount.compareTo(minValidPrice) < 0) {
+            throw new RuntimeException("Price must be higher than current price + step price");
         }
 
-        if (req.getAmount().compareTo(minValidPrice) < 0) {
-            throw new RuntimeException("Price must be higher than current price + step");
-        }
-
-        Bid newBid = new Bid();
-        newBid.setProductId(product.getId());
-        newBid.setBidderId(userId);
-        newBid.setAmount(req.getAmount());
-        newBid.setTime(now);
-        newBid.setStatus(BidStatus.VALID);
-
-        // setup auto-bid for user
-        if (Boolean.TRUE.equals(req.getIsAutoBid())) {
-            newBid.setIsAutoBid(true);
-            newBid.setMaxAmount(req.getMaxAmount());
-        } else {
-            newBid.setIsAutoBid(false);
-            newBid.setMaxAmount(req.getAmount());
-        }
-
-        bidRepo.save(newBid);
-
-        // Store previous winner ID for email notification
         Integer previousWinnerId = product.getWinnerId();
 
-        // update product price
-        product.setCurrentPrice(newBid.getAmount());
-        product.setWinnerId(userId);
+        Optional<Bid> currentLeaderOpt = bidRepo.findTopByProductIdAndStatusOrderByMaxAmountDescTimeAsc(
+                product.getId(), BidStatus.VALID
+        );
 
-        // handle auto bidding
-        // simple approach: check history and find max amount > current user price
-        Optional<Bid> opponentBidOpt = bidRepo.findTopByProductIdOrderByAmountDesc(product.getId());
-        productRepo.save(product);
-        sendUpdateToRedis(product, userId);
+        if (currentLeaderOpt.isEmpty()) {
+            createBid(product, userId, challengerAmount, challengerMax, req.getIsAutoBid());
+            updateProduct(product, challengerAmount, userId);
+            sendBidPlacedEmailNotification(product, userId, previousWinnerId);
+        } else {
+            Bid leaderBid = currentLeaderOpt.get();
+            BigDecimal leaderMax = leaderBid.getMaxAmount();
 
-        // Send email notifications
-        sendBidPlacedEmailNotification(product, userId, previousWinnerId);
+            if (leaderBid.getBidderId().equals(userId)) {
+                // If winner increase their max price
+                if (challengerMax.compareTo(leaderMax) > 0) {
+                    leaderBid.setMaxAmount(challengerMax);
+                    bidRepo.save(leaderBid);
+                }
+
+                return;
+            }
+
+            if (challengerMax.compareTo(leaderMax) > 0) {
+                BigDecimal newPrice = leaderMax.add(stepPrice);
+                if (newPrice.compareTo(challengerMax) > 0) {
+                    newPrice = challengerMax;
+                }
+
+                createBid(product, userId, newPrice, challengerMax, req.getIsAutoBid());
+                updateProduct(product, newPrice, userId);
+                sendBidPlacedEmailNotification(product, userId, previousWinnerId);
+            } else {
+                BigDecimal newPrice = challengerMax.add(stepPrice);
+
+                if (newPrice.compareTo(leaderMax) > 0) {
+                    newPrice = leaderMax;
+                }
+
+                createBid(product, userId, challengerAmount, challengerMax, req.getIsAutoBid());
+                createBid(product, leaderBid.getBidderId(), newPrice, leaderMax, true);
+
+                updateProduct(product, newPrice, leaderBid.getBidderId());
+                sendBidPlacedEmailNotification(product, leaderBid.getBidderId(), userId);
+            }
+        }
+
+        sendRedisUpdate(product, userId);
     }
 
-    private void sendBidPlacedEmailNotification(Product product, Integer newBidderId, Integer prevBidderId) {
+    private void sendBidPlacedEmailNotification(Product product, Integer newWinnerId, Integer previousWinnerId) {
         try {
-            // Fetch seller email
             User seller = userRepo.findById(product.getSellerId()).orElse(null);
             if (seller == null) return;
 
-            // Fetch new bidder email
-            User newBidder = userRepo.findById(newBidderId).orElse(null);
-            if (newBidder == null) return;
+            User newWinner = userRepo.findById(newWinnerId).orElse(null);
+            if (newWinner == null) return;
 
-            // Fetch previous bidder email (if exists)
             String prevBidderEmail = "";
-            if (prevBidderId != null && !prevBidderId.equals(newBidderId)) {
-                User prevBidder = userRepo.findById(prevBidderId).orElse(null);
+            if (previousWinnerId != null && !previousWinnerId.equals(newWinnerId)) {
+                User prevBidder = userRepo.findById(previousWinnerId).orElse(null);
                 if (prevBidder != null) {
                     prevBidderEmail = prevBidder.getEmail();
                 }
@@ -112,7 +134,7 @@ public class BiddingService {
                     product.getName(),
                     product.getCurrentPrice().toString(),
                     seller.getEmail(),
-                    newBidder.getEmail(),
+                    newWinner.getEmail(),
                     prevBidderEmail
             );
         } catch (Exception e) {
@@ -120,11 +142,11 @@ public class BiddingService {
         }
     }
 
-    private void sendUpdateToRedis(Product product, Integer userId) {
+    private void sendRedisUpdate(Product product, Integer userId) {
         try {
             Map<String, Object> event = new HashMap<>();
             event.put("productId", product.getId());
-            event.put("currentPrice",  product.getCurrentPrice());
+            event.put("currentPrice", product.getCurrentPrice());
             event.put("winnerId", userId);
             event.put("endTime", product.getEndTime().toString());
 
@@ -132,7 +154,28 @@ public class BiddingService {
             redisTemplate.convertAndSend("auction_updates", json);
             System.out.println("Sent Redis: " + json);
         } catch (Exception e) {
-            e.printStackTrace();
+            System.err.println("Failed to send Redis update: " + e.getMessage());
         }
+    }
+
+    private void createBid(Product p, Integer userId, BigDecimal amount, BigDecimal maxAmount, Boolean isAuto) {
+        Bid bid = new Bid();
+
+        bid.setProductId(p.getId());
+        bid.setBidderId(userId);
+        bid.setAmount(amount);
+        bid.setMaxAmount(maxAmount);
+        bid.setIsAutoBid(isAuto);
+        bid.setTime(LocalDateTime.now());
+        bid.setStatus(BidStatus.VALID);
+
+        bidRepo.save(bid);
+    }
+
+    private void updateProduct(Product p, BigDecimal newPrice, Integer newWinnerId) {
+        p.setCurrentPrice(newPrice);
+        p.setWinnerId(newWinnerId);
+
+        productRepo.save(p);
     }
 }
