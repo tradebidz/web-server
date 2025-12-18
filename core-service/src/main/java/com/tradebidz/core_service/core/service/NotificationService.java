@@ -105,7 +105,18 @@ public class NotificationService {
             data.put("type", "BID_REJECTED");
             data.put("product_name", productName);
             data.put("new_price", price);
-            data.put("bidder_email", bidderEmail);          
+            data.put("bidder_email", bidderEmail);
+
+            ObjectRecord<String, Map<String, String>> record = StreamRecords
+                    .newRecord()
+                    .ofObject(data)
+                    .withStreamKey(NOTIFICATION_STREAM);
+
+            redisTemplate.opsForStream().add(record);
+            System.out.println("BID_REJECTED email event sent for product: " + productName);
+        } catch (Exception e) {
+            System.err.println("Failed to send BID_REJECTED email event: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }

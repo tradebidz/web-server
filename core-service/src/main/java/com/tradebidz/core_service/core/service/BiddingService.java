@@ -55,12 +55,16 @@ public class BiddingService {
         BigDecimal currentPrice = product.getCurrentPrice();
         BigDecimal stepPrice = product.getStepPrice();
 
-        BigDecimal minValidPrice = (currentPrice.compareTo(BigDecimal.ZERO) == 0)
-                    ? product.getStartPrice()
-                    : currentPrice.add(stepPrice);
+        BigDecimal minValidPrice;
+
+        if (product.getWinnerId() == null) {
+            minValidPrice = product.getStartPrice();
+        } else {
+            minValidPrice = currentPrice.add(stepPrice);
+        }
 
         if (challengerAmount.compareTo(minValidPrice) < 0) {
-            throw new RuntimeException("Price must be higher than current price + step price");
+            throw new RuntimeException("Price must be equal or higher than " + minValidPrice);
         }
 
         Integer previousWinnerId = product.getWinnerId();

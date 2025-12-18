@@ -140,12 +140,16 @@ func startEmailWorker() {
 		for _, stream := range streams {
 			for _, msg := range stream.Messages {
 				values := msg.Values
-				msgType := values["type"].(string)
-				email := values["email"].(string)
+				msgType, ok := values["type"].(string)
+				if !ok {
+					fmt.Printf("Warning: 'type' field is missing or not a string\n")
+					continue
+				}
 
 				switch msgType {
 				case "VERIFY_EMAIL":
-					otp := values["otp"].(string)
+					email, _ := values["email"].(string)
+					otp, _ := values["otp"].(string)
 					fmt.Printf("Sending verification OTP %s to %s...\n", otp, email)
 
 					err := sendVerificationEmail(email, otp)
@@ -153,7 +157,8 @@ func startEmailWorker() {
 						fmt.Printf("Failed to send verification email to %s: %v\n", email, err)
 					}
 				case "RESET_PASSWORD":
-					otp := values["otp"].(string)
+					email, _ := values["email"].(string)
+					otp, _ := values["otp"].(string)
 					fmt.Printf("Sending password reset OTP %s to %s...\n", otp, email)
 
 					err := sendResetPasswordEmail(email, otp)
@@ -161,11 +166,11 @@ func startEmailWorker() {
 						fmt.Printf("Failed to send reset password email to %s: %v\n", email, err)
 					}
 				case "BID_PLACED":
-					productName := values["product_name"].(string)
-					newPrice := values["new_price"].(string)
-					sellerEmail := values["seller_email"].(string)
-					bidderEmail := values["bidder_email"].(string)
-					prevBidderEmail := values["prev_bidder_email"].(string)
+					productName, _ := values["product_name"].(string)
+					newPrice, _ := values["new_price"].(string)
+					sellerEmail, _ := values["seller_email"].(string)
+					bidderEmail, _ := values["bidder_email"].(string)
+					prevBidderEmail, _ := values["prev_bidder_email"].(string)
 					fmt.Printf("Sending bid placed notifications for %s...\n", productName)
 
 					err := sendBidPlacedEmail(sellerEmail, bidderEmail, prevBidderEmail, productName, newPrice)
@@ -173,9 +178,9 @@ func startEmailWorker() {
 						fmt.Printf("Failed to send bid placed emails: %v\n", err)
 					}
 				case "BID_REJECTED":
-					productName := values["product_name"].(string)
-					bidderEmail := values["bidder_email"].(string)
-					reason := values["reason"].(string)
+					productName, _ := values["product_name"].(string)
+					bidderEmail, _ := values["bidder_email"].(string)
+					reason, _ := values["reason"].(string)
 					fmt.Printf("Sending bid rejection email to %s...\n", bidderEmail)
 
 					err := sendBidRejectedEmail(bidderEmail, productName, reason)
@@ -183,10 +188,10 @@ func startEmailWorker() {
 						fmt.Printf("Failed to send bid rejected email: %v\n", err)
 					}
 				case "AUCTION_SUCCESS":
-					productName := values["product_name"].(string)
-					price := values["price"].(string)
-					sellerEmail := values["seller_email"].(string)
-					winnerEmail := values["winner_email"].(string)
+					productName, _ := values["product_name"].(string)
+					price, _ := values["price"].(string)
+					sellerEmail, _ := values["seller_email"].(string)
+					winnerEmail, _ := values["winner_email"].(string)
 					fmt.Printf("Sending auction success emails for %s...\n", productName)
 
 					err := sendAuctionSuccessEmail(sellerEmail, winnerEmail, productName, price)
@@ -194,8 +199,8 @@ func startEmailWorker() {
 						fmt.Printf("Failed to send auction success emails: %v\n", err)
 					}
 				case "AUCTION_FAIL":
-					productName := values["product_name"].(string)
-					sellerEmail := values["seller_email"].(string)
+					productName, _ := values["product_name"].(string)
+					sellerEmail, _ := values["seller_email"].(string)
 					fmt.Printf("Sending auction fail email to %s...\n", sellerEmail)
 
 					err := sendAuctionFailEmail(sellerEmail, productName)
@@ -203,10 +208,10 @@ func startEmailWorker() {
 						fmt.Printf("Failed to send auction fail email: %v\n", err)
 					}
 				case "NEW_QUESTION":
-					productName := values["product_name"].(string)
-					sellerEmail := values["seller_email"].(string)
-					question := values["question"].(string)
-					productUrl := values["product_url"].(string)
+					productName, _ := values["product_name"].(string)
+					sellerEmail, _ := values["seller_email"].(string)
+					question, _ := values["question"].(string)
+					productUrl, _ := values["product_url"].(string)
 					fmt.Printf("Sending new question notification to %s...\n", sellerEmail)
 
 					err := sendNewQuestionEmail(sellerEmail, productName, question, productUrl)
@@ -214,10 +219,10 @@ func startEmailWorker() {
 						fmt.Printf("Failed to send new question email: %v\n", err)
 					}
 				case "NEW_ANSWER":
-					productName := values["product_name"].(string)
-					question := values["question"].(string)
-					answer := values["answer"].(string)
-					emailsJson := values["emails"].(string)
+					productName, _ := values["product_name"].(string)
+					question, _ := values["question"].(string)
+					answer, _ := values["answer"].(string)
+					emailsJson, _ := values["emails"].(string)
 
 					var emails []string
 					err := json.Unmarshal([]byte(emailsJson), &emails)
