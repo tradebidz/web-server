@@ -10,6 +10,8 @@ import { BiddingModule } from './bidding/bidding.module';
 import { CategoriesModule } from './categories/categories.module';
 import { AdminModule } from './admin/admin.module';
 import { NotificationModule } from './notification/notification.module';
+import { PaymentModule } from './payment/payment.module';
+import { OrderModule } from './order/order.module';
 
 @Module({
   imports: [
@@ -22,6 +24,8 @@ import { NotificationModule } from './notification/notification.module';
     ProductsModule,
     BiddingModule,
     CategoriesModule,
+    PaymentModule,
+    OrderModule,
   ],
   controllers: [AppController],
   providers: [AppService],
