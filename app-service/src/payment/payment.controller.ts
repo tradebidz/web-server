@@ -15,48 +15,20 @@ export class PaymentController {
 
   @UseGuards(AtGuard)
   @Post('create_payment_url')
-  async createPaymentUrl(@Req() req, @Body() body: { productId: number }) {
-    const userId = req.user.id;
+  async createPaymentUrl(@Req() req, @Body() body: { orderId: number }) {
+    const userId = req.user.userId;
 
-    const product = await this.prisma.products.findUnique({ where: { id: body.productId } });
+    const order = await this.prisma.orders.findUnique({ where: { id: body.orderId } });
+    if (!order) throw new BadRequestException('Order not found');
 
-    if (!product) {
-      throw new BadRequestException('Product not found');
-    }
+    if (order.buyer_id !== userId) throw new ForbiddenException('You are not the buyer of this order');
+    if (order.payment_status === 'PAID') throw new BadRequestException('Order already paid');
 
-    if (product.winner_id !== userId) {
-      throw new ForbiddenException("You are not the winner of this product");
-    }
-
-    if (product.seller_id === null) {
-      throw new BadRequestException('Product seller information is missing');
-    }
-
-    if (product.current_price === null) {
-      throw new BadRequestException('Product price is missing');
-    }
-
-    let order = await this.prisma.orders.findUnique({ where: { product_id: product.id } });
-
-    if (!order) {
-      order = await this.prisma.orders.create({
-        data: {
-          product_id: product.id,
-          buyer_id: userId,
-          seller_id: product.seller_id,
-          amount: product.current_price,
-          status: 'PENDING',
-          payment_status: 'UNPAID'
-        }
-      });
-    }
-
-    const ipAddr = req;
     const paymentUrl = this.paymentService.createVnPayUrl(
       req,
       order.id,
       Number(order.amount),
-      `Order payment #${order.id}`
+      `Order payment for #${order.id}`
     );
 
     return { url: paymentUrl };
