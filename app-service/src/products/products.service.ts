@@ -89,11 +89,17 @@ export class ProductsService {
         p.start_price, p.current_price, p.step_price, p.buy_now_price,
         p.start_time, p.end_time, p.is_auto_extend, p.status, p.winner_id,
         p.view_count, p.created_at, p.updated_at,
-        u.full_name as bidder_name,
+        c.name as category_name,
+        seller.full_name as seller_name,
+        seller.rating_score as seller_rating_score,
+        seller.rating_count as seller_rating_count,
+        winner.full_name as winner_name,
         (SELECT COUNT(*)::int FROM bids b WHERE b.product_id = p.id) as bid_count,
         (CASE WHEN p.created_at > ${timeThreshold} THEN true ELSE false END) as is_new
       FROM products p
-      LEFT JOIN users u ON p.winner_id = u.id
+      LEFT JOIN categories c ON p.category_id = c.id
+      LEFT JOIN users seller ON p.seller_id = seller.id
+      LEFT JOIN users winner ON p.winner_id = winner.id
       ${whereSql}
       ${orderBySql}
       LIMIT ${limit} OFFSET ${skip}
@@ -106,8 +112,40 @@ export class ProductsService {
         });
 
         return {
-          ...p,
+          id: p.id,
+          seller_id: p.seller_id,
+          category_id: p.category_id,
+          name: p.name,
           thumbnail: img?.url,
+          description: p.description,
+          start_price: p.start_price,
+          current_price: p.current_price,
+          step_price: p.step_price,
+          buy_now_price: p.buy_now_price,
+          start_time: p.start_time,
+          end_time: p.end_time,
+          is_auto_extend: p.is_auto_extend,
+          status: p.status,
+          winner_id: p.winner_id,
+          view_count: p.view_count,
+          bid_count: p.bid_count,
+          is_new: p.is_new,
+          created_at: p.created_at,
+          updated_at: p.updated_at,
+          category: p.category_name ? {
+            id: p.category_id,
+            name: p.category_name
+          } : null,
+          seller: p.seller_name ? {
+            id: p.seller_id,
+            full_name: p.seller_name,
+            rating_score: p.seller_rating_score,
+            rating_count: p.seller_rating_count
+          } : null,
+          winner: p.winner_name ? {
+            id: p.winner_id,
+            full_name: p.winner_name
+          } : null,
         }
       })
     );
@@ -171,7 +209,16 @@ export class ProductsService {
       where: { status: 'ACTIVE', end_time: { gt: new Date() } },
       orderBy: { end_time: 'asc' },
       take: 5,
-      include: { product_images: { where: { is_primary: true } } }
+      include: {
+        product_images: { where: { is_primary: true } },
+        categories: { select: { id: true, name: true } },
+        users_products_seller_idTousers: {
+          select: { id: true, full_name: true, rating_score: true, rating_count: true }
+        },
+        users_products_winner_idTousers: {
+          select: { id: true, full_name: true }
+        }
+      }
     });
   }
 
@@ -180,7 +227,16 @@ export class ProductsService {
       where: { status: 'ACTIVE' },
       orderBy: { bids: { _count: 'desc' } },
       take: 5,
-      include: { product_images: { where: { is_primary: true } } }
+      include: {
+        product_images: { where: { is_primary: true } },
+        categories: { select: { id: true, name: true } },
+        users_products_seller_idTousers: {
+          select: { id: true, full_name: true, rating_score: true, rating_count: true }
+        },
+        users_products_winner_idTousers: {
+          select: { id: true, full_name: true }
+        }
+      }
     });
   }
 
@@ -189,7 +245,16 @@ export class ProductsService {
       where: { status: 'ACTIVE' },
       orderBy: { current_price: 'desc' },
       take: 5,
-      include: { product_images: { where: { is_primary: true } } }
+      include: {
+        product_images: { where: { is_primary: true } },
+        categories: { select: { id: true, name: true } },
+        users_products_seller_idTousers: {
+          select: { id: true, full_name: true, rating_score: true, rating_count: true }
+        },
+        users_products_winner_idTousers: {
+          select: { id: true, full_name: true }
+        }
+      }
     });
   }
 
