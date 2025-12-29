@@ -9,6 +9,7 @@ import (
 	"image/jpeg"
 	"io"
 	"net/http"
+	"net/smtp"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,6 +19,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
+)
+
+const (
+	SMTPHost    = "smtp.gmail.com"
+	SMTPPort    = "587"
+	SenderEmail = "tradebidz8386@gmail.com"
+	SenderName  = "TradeBidz"
 )
 
 func main() {
@@ -124,6 +132,8 @@ func startEmailWorker() {
 
 	rdb.XGroupCreateMkStream(ctx, "notification_stream", "email_workers", "$")
 
+	fmt.Println("📧 Email Worker started with Gmail SMTP...")
+
 	for {
 		streams, err := rdb.XReadGroup(ctx, &redis.XReadGroupArgs{
 			Group:    "email_workers",
@@ -134,6 +144,7 @@ func startEmailWorker() {
 		}).Result()
 
 		if err != nil {
+			time.Sleep(1 * time.Second)
 			continue
 		}
 
@@ -143,6 +154,7 @@ func startEmailWorker() {
 				msgType, ok := values["type"].(string)
 				if !ok {
 					fmt.Printf("Warning: 'type' field is missing or not a string\n")
+					rdb.XAck(ctx, "notification_stream", "email_workers", msg.ID)
 					continue
 				}
 
@@ -228,13 +240,12 @@ func startEmailWorker() {
 					err := json.Unmarshal([]byte(emailsJson), &emails)
 					if err != nil {
 						fmt.Printf("Failed to parse emails array: %v\n", err)
-						continue
-					}
-
-					fmt.Printf("Sending new answer notification to %d bidders...\n", len(emails))
-					err = sendNewAnswerEmail(emails, productName, question, answer)
-					if err != nil {
-						fmt.Printf("Failed to send new answer emails: %v\n", err)
+					} else {
+						fmt.Printf("Sending new answer notification to %d bidders...\n", len(emails))
+						err = sendNewAnswerEmail(emails, productName, question, answer)
+						if err != nil {
+							fmt.Printf("Failed to send new answer emails: %v\n", err)
+						}
 					}
 				}
 
@@ -244,545 +255,238 @@ func startEmailWorker() {
 	}
 }
 
-func sendVerificationEmail(to string, otp string) error {
-	// Mailtrap API configuration
-	apiToken := os.Getenv("MAILTRAP_API_TOKEN")
-	fromEmail := os.Getenv("FROM_EMAIL")
-	fromName := os.Getenv("FROM_NAME")
+// --- SMTP HELPER FUNCTION ---
 
-	// Debug: Check if token is loaded
-	if apiToken == "" {
-		return fmt.Errorf("MAILTRAP_API_TOKEN is not set in environment variables")
-	}
-	fmt.Printf("Using API token: %s...%s (length: %d)\n", apiToken[:8], apiToken[len(apiToken)-4:], len(apiToken))
-
-	if fromEmail == "" {
-		fromEmail = "hello@demomailtrap.co"
-	}
-	if fromName == "" {
-		fromName = "TradeBidz"
+func sendEmailViaGmail(to string, subject string, htmlBody string) error {
+	appPassword := os.Getenv("GMAIL_APP_PASSWORD")
+	if appPassword == "" {
+		return fmt.Errorf("GMAIL_APP_PASSWORD is not set")
 	}
 
-	// Prepare email payload
-	payload := map[string]interface{}{
-		"from": map[string]string{
-			"email": fromEmail,
-			"name":  fromName,
-		},
-		"to": []map[string]string{
-			{"email": to},
-		},
-		"subject": "Email Verification - Your OTP Code",
-		"html": fmt.Sprintf(`
-			<html>
-			<body>
-				<h2>Email Verification</h2>
-				<p>Your OTP code is: <strong>%s</strong></p>
-				<p>This code will expire in 10 minutes.</p>
-				<p>If you did not request this code, please ignore this email.</p>
-			</body>
-			</html>
-		`, otp),
-		"category": "Email Verification",
-	}
+	auth := smtp.PlainAuth("", SenderEmail, appPassword, SMTPHost)
+	headers := make(map[string]string)
+	headers["From"] = fmt.Sprintf("%s <%s>", SenderName, SenderEmail)
+	headers["To"] = to
+	headers["Subject"] = subject
+	headers["MIME-Version"] = "1.0"
+	headers["Content-Type"] = "text/html; charset=\"UTF-8\""
 
-	jsonData, err := json.Marshal(payload)
+	message := ""
+	for k, v := range headers {
+		message += fmt.Sprintf("%s: %s\r\n", k, v)
+	}
+	message += "\r\n" + htmlBody
+
+	addr := fmt.Sprintf("%s:%s", SMTPHost, SMTPPort)
+
+	err := smtp.SendMail(addr, auth, SenderEmail, []string{to}, []byte(message))
 	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %v", err)
-	}
-
-	// Send request to Mailtrap API
-	req, err := http.NewRequest("POST", "https://send.api.mailtrap.io/api/send", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+apiToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Printf("Failed to send email to %s: %v\n", to, err)
 		return err
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("mailtrap API error (status %d): %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	fmt.Printf("Email sent successfully to %s via Mailtrap\n", to)
 	return nil
 }
 
+func sendVerificationEmail(to string, otp string) error {
+	subject := "Email Verification - Your OTP Code"
+	html := fmt.Sprintf(`
+		<html>
+		<body>
+			<h2>Email Verification</h2>
+			<p>Your OTP code is: <strong>%s</strong></p>
+			<p>This code will expire in 10 minutes.</p>
+			<p>If you did not request this code, please ignore this email.</p>
+		</body>
+		</html>
+	`, otp)
+
+	return sendEmailViaGmail(to, subject, html)
+}
+
+func sendResetPasswordEmail(to string, otp string) error {
+	subject := "Password Reset - Your OTP Code"
+	html := fmt.Sprintf(`
+		<html>
+		<body>
+			<h2>Password Reset Request</h2>
+			<p>You have requested to reset your password.</p>
+			<p>Your OTP code is: <strong>%s</strong></p>
+			<p>This code will expire in 10 minutes.</p>
+			<p>If you did not request a password reset, please ignore this email and your password will remain unchanged.</p>
+		</body>
+		</html>
+	`, otp)
+
+	return sendEmailViaGmail(to, subject, html)
+}
+
 func sendBidPlacedEmail(sellerEmail, bidderEmail, prevBidderEmail, productName, newPrice string) error {
-	apiToken := os.Getenv("MAILTRAP_API_TOKEN")
-	fromEmail := os.Getenv("FROM_EMAIL")
-	fromName := os.Getenv("FROM_NAME")
-
-	if apiToken == "" {
-		return fmt.Errorf("MAILTRAP_API_TOKEN is not set in environment variables")
-	}
-	if fromEmail == "" {
-		fromEmail = "hello@demomailtrap.co"
-	}
-	if fromName == "" {
-		fromName = "TradeBidz"
-	}
-
-	// Send email to seller
-	sellerPayload := map[string]interface{}{
-		"from": map[string]string{
-			"email": fromEmail,
-			"name":  fromName,
-		},
-		"to": []map[string]string{
-			{"email": sellerEmail},
-		},
-		"subject": "New Bid Placed on Your Product",
-		"html": fmt.Sprintf(`
-			<html>
-			<body>
-				<h2>New Bid Received!</h2>
-				<p>Great news! A new bid has been placed on your product: <strong>%s</strong></p>
-				<p>New bid amount: <strong>$%s</strong></p>
-				<p>Log in to your account to view the bidder details and manage your auction.</p>
-			</body>
-			</html>
-		`, productName, newPrice),
-		"category": "Auction Activity",
+	// 1. Send to Seller
+	sellerSubject := "New Bid Placed on Your Product"
+	sellerHtml := fmt.Sprintf(`
+		<html>
+		<body>
+			<h2>New Bid Received!</h2>
+			<p>Great news! A new bid has been placed on your product: <strong>%s</strong></p>
+			<p>New bid amount: <strong>$%s</strong></p>
+			<p>Log in to your account to view the bidder details and manage your auction.</p>
+		</body>
+		</html>
+	`, productName, newPrice)
+	if err := sendEmailViaGmail(sellerEmail, sellerSubject, sellerHtml); err != nil {
+		fmt.Printf("Error sending to seller: %v\n", err) // Log but continue
 	}
 
-	if err := sendEmailViaMailtrap(sellerPayload, apiToken); err != nil {
-		return fmt.Errorf("failed to send email to seller: %v", err)
+	// 2. Send to Current Bidder
+	bidderSubject := "Bid Confirmation - " + productName
+	bidderHtml := fmt.Sprintf(`
+		<html>
+		<body>
+			<h2>Bid Placed Successfully!</h2>
+			<p>Your bid has been successfully placed on: <strong>%s</strong></p>
+			<p>Your bid amount: <strong>$%s</strong></p>
+			<p>You are currently the highest bidder. We'll notify you if someone outbids you.</p>
+			<p>Good luck!</p>
+		</body>
+		</html>
+	`, productName, newPrice)
+	if err := sendEmailViaGmail(bidderEmail, bidderSubject, bidderHtml); err != nil {
+		fmt.Printf("Error sending to bidder: %v\n", err)
 	}
 
-	// Send email to new bidder
-	bidderPayload := map[string]interface{}{
-		"from": map[string]string{
-			"email": fromEmail,
-			"name":  fromName,
-		},
-		"to": []map[string]string{
-			{"email": bidderEmail},
-		},
-		"subject": "Bid Confirmation - " + productName,
-		"html": fmt.Sprintf(`
-			<html>
-			<body>
-				<h2>Bid Placed Successfully!</h2>
-				<p>Your bid has been successfully placed on: <strong>%s</strong></p>
-				<p>Your bid amount: <strong>$%s</strong></p>
-				<p>You are currently the highest bidder. We'll notify you if someone outbids you.</p>
-				<p>Good luck!</p>
-			</body>
-			</html>
-		`, productName, newPrice),
-		"category": "Auction Activity",
-	}
-
-	if err := sendEmailViaMailtrap(bidderPayload, apiToken); err != nil {
-		return fmt.Errorf("failed to send email to bidder: %v", err)
-	}
-
-	// Send email to previous bidder if exists
+	// 3. Send to Previous Bidder (if exists)
 	if prevBidderEmail != "" {
-		prevBidderPayload := map[string]interface{}{
-			"from": map[string]string{
-				"email": fromEmail,
-				"name":  fromName,
-			},
-			"to": []map[string]string{
-				{"email": prevBidderEmail},
-			},
-			"subject": "You've Been Outbid - " + productName,
-			"html": fmt.Sprintf(`
-				<html>
-				<body>
-					<h2>You've Been Outbid</h2>
-					<p>Someone has placed a higher bid on: <strong>%s</strong></p>
-					<p>New highest bid: <strong>$%s</strong></p>
-					<p>Don't miss out! Place a higher bid to stay in the running.</p>
-				</body>
-				</html>
-			`, productName, newPrice),
-			"category": "Auction Activity",
-		}
-
-		if err := sendEmailViaMailtrap(prevBidderPayload, apiToken); err != nil {
-			return fmt.Errorf("failed to send email to previous bidder: %v", err)
+		prevSubject := "You've Been Outbid - " + productName
+		prevHtml := fmt.Sprintf(`
+			<html>
+			<body>
+				<h2>You've Been Outbid</h2>
+				<p>Someone has placed a higher bid on: <strong>%s</strong></p>
+				<p>New highest bid: <strong>$%s</strong></p>
+				<p>Don't miss out! Place a higher bid to stay in the running.</p>
+			</body>
+			</html>
+		`, productName, newPrice)
+		if err := sendEmailViaGmail(prevBidderEmail, prevSubject, prevHtml); err != nil {
+			fmt.Printf("Error sending to prev bidder: %v\n", err)
 		}
 	}
 
-	fmt.Printf("Bid placed emails sent successfully\n")
 	return nil
 }
 
 func sendBidRejectedEmail(bidderEmail, productName, reason string) error {
-	apiToken := os.Getenv("MAILTRAP_API_TOKEN")
-	fromEmail := os.Getenv("FROM_EMAIL")
-	fromName := os.Getenv("FROM_NAME")
+	subject := "Bid Rejected - " + productName
+	html := fmt.Sprintf(`
+		<html>
+		<body>
+			<h2>Bid Rejected</h2>
+			<p>Unfortunately, your bid on <strong>%s</strong> has been rejected by the seller.</p>
+			<p>Reason: <em>%s</em></p>
+			<p>We apologize for any inconvenience. Please feel free to browse other auctions on TradeBidz.</p>
+		</body>
+		</html>
+	`, productName, reason)
 
-	if apiToken == "" {
-		return fmt.Errorf("MAILTRAP_API_TOKEN is not set in environment variables")
-	}
-	if fromEmail == "" {
-		fromEmail = "hello@demomailtrap.co"
-	}
-	if fromName == "" {
-		fromName = "TradeBidz"
-	}
-
-	payload := map[string]interface{}{
-		"from": map[string]string{
-			"email": fromEmail,
-			"name":  fromName,
-		},
-		"to": []map[string]string{
-			{"email": bidderEmail},
-		},
-		"subject": "Bid Rejected - " + productName,
-		"html": fmt.Sprintf(`
-			<html>
-			<body>
-				<h2>Bid Rejected</h2>
-				<p>Unfortunately, your bid on <strong>%s</strong> has been rejected by the seller.</p>
-				<p>Reason: <em>%s</em></p>
-				<p>We apologize for any inconvenience. Please feel free to browse other auctions on TradeBidz.</p>
-			</body>
-			</html>
-		`, productName, reason),
-		"category": "Auction Activity",
-	}
-
-	if err := sendEmailViaMailtrap(payload, apiToken); err != nil {
-		return err
-	}
-
-	fmt.Printf("Bid rejected email sent successfully to %s\n", bidderEmail)
-	return nil
+	return sendEmailViaGmail(bidderEmail, subject, html)
 }
 
 func sendAuctionSuccessEmail(sellerEmail, winnerEmail, productName, price string) error {
-	apiToken := os.Getenv("MAILTRAP_API_TOKEN")
-	fromEmail := os.Getenv("FROM_EMAIL")
-	fromName := os.Getenv("FROM_NAME")
-
-	if apiToken == "" {
-		return fmt.Errorf("MAILTRAP_API_TOKEN is not set in environment variables")
-	}
-	if fromEmail == "" {
-		fromEmail = "hello@demomailtrap.co"
-	}
-	if fromName == "" {
-		fromName = "TradeBidz"
-	}
-
-	// Send email to seller
-	sellerPayload := map[string]interface{}{
-		"from": map[string]string{
-			"email": fromEmail,
-			"name":  fromName,
-		},
-		"to": []map[string]string{
-			{"email": sellerEmail},
-		},
-		"subject": "Congratulations! Your Auction Sold Successfully",
-		"html": fmt.Sprintf(`
-			<html>
-			<body>
-				<h2>🎉 Auction Successful!</h2>
-				<p>Congratulations! Your auction for <strong>%s</strong> has ended successfully.</p>
-				<p>Final sale price: <strong>$%s</strong></p>
-				<p>The winning bidder will be contacted shortly. Please log in to your account to view the winner's details and complete the transaction.</p>
-			</body>
-			</html>
-		`, productName, price),
-		"category": "Auction Completion",
+	// 1. Send to Seller
+	sellerSubject := "Congratulations! Your Auction Sold Successfully"
+	sellerHtml := fmt.Sprintf(`
+		<html>
+		<body>
+			<h2>🎉 Auction Successful!</h2>
+			<p>Congratulations! Your auction for <strong>%s</strong> has ended successfully.</p>
+			<p>Final sale price: <strong>$%s</strong></p>
+			<p>The winning bidder will be contacted shortly. Please log in to your account to view the winner's details and complete the transaction.</p>
+		</body>
+		</html>
+	`, productName, price)
+	if err := sendEmailViaGmail(sellerEmail, sellerSubject, sellerHtml); err != nil {
+		fmt.Printf("Error sending to seller: %v\n", err)
 	}
 
-	if err := sendEmailViaMailtrap(sellerPayload, apiToken); err != nil {
-		return fmt.Errorf("failed to send email to seller: %v", err)
+	// 2. Send to Winner
+	winnerSubject := "Congratulations! You Won the Auction"
+	winnerHtml := fmt.Sprintf(`
+		<html>
+		<body>
+			<h2>🏆 You Won!</h2>
+			<p>Congratulations! You have won the auction for <strong>%s</strong>!</p>
+			<p>Your winning bid: <strong>$%s</strong></p>
+			<p>The seller will contact you shortly to arrange payment and delivery. Please log in to your account for more details.</p>
+			<p>Thank you for using TradeBidz!</p>
+		</body>
+		</html>
+	`, productName, price)
+	if err := sendEmailViaGmail(winnerEmail, winnerSubject, winnerHtml); err != nil {
+		fmt.Printf("Error sending to winner: %v\n", err)
 	}
 
-	// Send email to winner
-	winnerPayload := map[string]interface{}{
-		"from": map[string]string{
-			"email": fromEmail,
-			"name":  fromName,
-		},
-		"to": []map[string]string{
-			{"email": winnerEmail},
-		},
-		"subject": "Congratulations! You Won the Auction",
-		"html": fmt.Sprintf(`
-			<html>
-			<body>
-				<h2>🏆 You Won!</h2>
-				<p>Congratulations! You have won the auction for <strong>%s</strong>!</p>
-				<p>Your winning bid: <strong>$%s</strong></p>
-				<p>The seller will contact you shortly to arrange payment and delivery. Please log in to your account for more details.</p>
-				<p>Thank you for using TradeBidz!</p>
-			</body>
-			</html>
-		`, productName, price),
-		"category": "Auction Completion",
-	}
-
-	if err := sendEmailViaMailtrap(winnerPayload, apiToken); err != nil {
-		return fmt.Errorf("failed to send email to winner: %v", err)
-	}
-
-	fmt.Printf("Auction success emails sent successfully\n")
 	return nil
 }
 
 func sendAuctionFailEmail(sellerEmail, productName string) error {
-	apiToken := os.Getenv("MAILTRAP_API_TOKEN")
-	fromEmail := os.Getenv("FROM_EMAIL")
-	fromName := os.Getenv("FROM_NAME")
+	subject := "Auction Ended - No Bids Received"
+	html := fmt.Sprintf(`
+		<html>
+		<body>
+			<h2>Auction Ended</h2>
+			<p>Your auction for <strong>%s</strong> has ended.</p>
+			<p>Unfortunately, no bids were received during this auction period.</p>
+			<p>You can consider relisting the item with adjusted pricing or improved descriptions to attract more bidders.</p>
+			<p>Thank you for using TradeBidz!</p>
+		</body>
+		</html>
+	`, productName)
 
-	if apiToken == "" {
-		return fmt.Errorf("MAILTRAP_API_TOKEN is not set in environment variables")
-	}
-	if fromEmail == "" {
-		fromEmail = "hello@demomailtrap.co"
-	}
-	if fromName == "" {
-		fromName = "TradeBidz"
-	}
-
-	payload := map[string]interface{}{
-		"from": map[string]string{
-			"email": fromEmail,
-			"name":  fromName,
-		},
-		"to": []map[string]string{
-			{"email": sellerEmail},
-		},
-		"subject": "Auction Ended - No Bids Received",
-		"html": fmt.Sprintf(`
-			<html>
-			<body>
-				<h2>Auction Ended</h2>
-				<p>Your auction for <strong>%s</strong> has ended.</p>
-				<p>Unfortunately, no bids were received during this auction period.</p>
-				<p>You can consider relisting the item with adjusted pricing or improved descriptions to attract more bidders.</p>
-				<p>Thank you for using TradeBidz!</p>
-			</body>
-			</html>
-		`, productName),
-		"category": "Auction Completion",
-	}
-
-	if err := sendEmailViaMailtrap(payload, apiToken); err != nil {
-		return err
-	}
-
-	fmt.Printf("Auction fail email sent successfully to %s\n", sellerEmail)
-	return nil
+	return sendEmailViaGmail(sellerEmail, subject, html)
 }
 
 func sendNewQuestionEmail(sellerEmail, productName, question, productUrl string) error {
-	apiToken := os.Getenv("MAILTRAP_API_TOKEN")
-	fromEmail := os.Getenv("FROM_EMAIL")
-	fromName := os.Getenv("FROM_NAME")
+	subject := "New Question About Your Product - " + productName
+	html := fmt.Sprintf(`
+		<html>
+		<body>
+			<h2>New Question Received</h2>
+			<p>A potential buyer has asked a question about your product: <strong>%s</strong></p>
+			<p><strong>Question:</strong></p>
+			<p style="padding: 10px; background-color: #f5f5f5; border-left: 3px solid #007bff;">%s</p>
+			<p>Please answer this question to help increase buyer confidence and improve your chances of a successful sale.</p>
+			<p><a href="%s" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Product & Answer Question</a></p>
+		</body>
+		</html>
+	`, productName, question, productUrl)
 
-	if apiToken == "" {
-		return fmt.Errorf("MAILTRAP_API_TOKEN is not set in environment variables")
-	}
-	if fromEmail == "" {
-		fromEmail = "hello@demomailtrap.co"
-	}
-	if fromName == "" {
-		fromName = "TradeBidz"
-	}
-
-	payload := map[string]interface{}{
-		"from": map[string]string{
-			"email": fromEmail,
-			"name":  fromName,
-		},
-		"to": []map[string]string{
-			{"email": sellerEmail},
-		},
-		"subject": "New Question About Your Product - " + productName,
-		"html": fmt.Sprintf(`
-			<html>
-			<body>
-				<h2>New Question Received</h2>
-				<p>A potential buyer has asked a question about your product: <strong>%s</strong></p>
-				<p><strong>Question:</strong></p>
-				<p style="padding: 10px; background-color: #f5f5f5; border-left: 3px solid #007bff;">%s</p>
-				<p>Please answer this question to help increase buyer confidence and improve your chances of a successful sale.</p>
-				<p><a href="%s" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Product & Answer Question</a></p>
-			</body>
-			</html>
-		`, productName, question, productUrl),
-		"category": "Product Questions",
-	}
-
-	if err := sendEmailViaMailtrap(payload, apiToken); err != nil {
-		return err
-	}
-
-	fmt.Printf("New question email sent successfully to %s\n", sellerEmail)
-	return nil
+	return sendEmailViaGmail(sellerEmail, subject, html)
 }
 
 func sendNewAnswerEmail(emails []string, productName, question, answer string) error {
-	apiToken := os.Getenv("MAILTRAP_API_TOKEN")
-	fromEmail := os.Getenv("FROM_EMAIL")
-	fromName := os.Getenv("FROM_NAME")
+	subject := "Seller Answered a Question - " + productName
 
-	if apiToken == "" {
-		return fmt.Errorf("MAILTRAP_API_TOKEN is not set in environment variables")
-	}
-	if fromEmail == "" {
-		fromEmail = "hello@demomailtrap.co"
-	}
-	if fromName == "" {
-		fromName = "TradeBidz"
-	}
-
-	// Send individual email to each bidder
 	for _, email := range emails {
-		payload := map[string]interface{}{
-			"from": map[string]string{
-				"email": fromEmail,
-				"name":  fromName,
-			},
-			"to": []map[string]string{
-				{"email": email},
-			},
-			"subject": "Seller Answered a Question - " + productName,
-			"html": fmt.Sprintf(`
-				<html>
-				<body>
-					<h2>New Answer Posted</h2>
-					<p>The seller has answered a question about <strong>%s</strong>, a product you're interested in.</p>
-					<p><strong>Question:</strong></p>
-					<p style="padding: 10px; background-color: #f5f5f5; border-left: 3px solid #007bff;">%s</p>
-					<p><strong>Answer:</strong></p>
-					<p style="padding: 10px; background-color: #e8f4f8; border-left: 3px solid #28a745;">%s</p>
-					<p>This information may help you make a more informed bidding decision.</p>
-				</body>
-				</html>
-			`, productName, question, answer),
-			"category": "Product Questions",
-		}
+		html := fmt.Sprintf(`
+			<html>
+			<body>
+				<h2>New Answer Posted</h2>
+				<p>The seller has answered a question about <strong>%s</strong>, a product you're interested in.</p>
+				<p><strong>Question:</strong></p>
+				<p style="padding: 10px; background-color: #f5f5f5; border-left: 3px solid #007bff;">%s</p>
+				<p><strong>Answer:</strong></p>
+				<p style="padding: 10px; background-color: #e8f4f8; border-left: 3px solid #28a745;">%s</p>
+				<p>This information may help you make a more informed bidding decision.</p>
+			</body>
+			</html>
+		`, productName, question, answer)
 
-		if err := sendEmailViaMailtrap(payload, apiToken); err != nil {
+		if err := sendEmailViaGmail(email, subject, html); err != nil {
 			fmt.Printf("Failed to send answer email to %s: %v\n", email, err)
-			// Continue sending to other recipients even if one fails
 			continue
 		}
 		fmt.Printf("New answer email sent to %s\n", email)
 	}
 
-	return nil
-}
-
-func sendEmailViaMailtrap(payload map[string]interface{}, apiToken string) error {
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %v", err)
-	}
-
-	req, err := http.NewRequest("POST", "https://send.api.mailtrap.io/api/send", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+apiToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %v", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("mailtrap API error (status %d): %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	return nil
-}
-
-func sendResetPasswordEmail(to string, otp string) error {
-	// Mailtrap API configuration
-	apiToken := os.Getenv("MAILTRAP_API_TOKEN")
-	fromEmail := os.Getenv("FROM_EMAIL")
-	fromName := os.Getenv("FROM_NAME")
-
-	// Debug: Check if token is loaded
-	if apiToken == "" {
-		return fmt.Errorf("MAILTRAP_API_TOKEN is not set in environment variables")
-	}
-
-	if fromEmail == "" {
-		fromEmail = "hello@demomailtrap.co"
-	}
-	if fromName == "" {
-		fromName = "TradeBidz"
-	}
-
-	// Prepare email payload
-	payload := map[string]interface{}{
-		"from": map[string]string{
-			"email": fromEmail,
-			"name":  fromName,
-		},
-		"to": []map[string]string{
-			{"email": to},
-		},
-		"subject": "Password Reset - Your OTP Code",
-		"html": fmt.Sprintf(`
-			<html>
-			<body>
-				<h2>Password Reset Request</h2>
-				<p>You have requested to reset your password.</p>
-				<p>Your OTP code is: <strong>%s</strong></p>
-				<p>This code will expire in 10 minutes.</p>
-				<p>If you did not request a password reset, please ignore this email and your password will remain unchanged.</p>
-			</body>
-			</html>
-		`, otp),
-		"category": "Password Reset",
-	}
-
-	jsonData, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("failed to marshal JSON: %v", err)
-	}
-
-	// Send request to Mailtrap API
-	req, err := http.NewRequest("POST", "https://send.api.mailtrap.io/api/send", bytes.NewBuffer(jsonData))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %v", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+apiToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Printf("Failed to send reset password email to %s: %v\n", to, err)
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("mailtrap API error (status %d): %s", resp.StatusCode, string(bodyBytes))
-	}
-
-	fmt.Printf("Password reset email sent successfully to %s via Mailtrap\n", to)
 	return nil
 }
