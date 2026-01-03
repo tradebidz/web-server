@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	_ "image/png"
 	"io"
 	"net/http"
 	"net/smtp"
@@ -15,8 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-contrib/cors"
+	_ "golang.org/x/image/webp"
+
 	"github.com/disintegration/imaging"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
@@ -35,13 +38,13 @@ func main() {
 	r := gin.Default()
 
 	r.Use(cors.New(cors.Config{
-        AllowOrigins:     []string{"http://localhost:5173"}, // Port của frontend
-        AllowMethods:     []string{"POST", "GET", "OPTIONS", "PUT", "DELETE"},
-        AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
-        ExposeHeaders:    []string{"Content-Length"},
-        AllowCredentials: true,
-        MaxAge:           12 * time.Hour,
-    }))
+		AllowOrigins:     []string{"http://localhost:5173"}, // Port của frontend
+		AllowMethods:     []string{"POST", "GET", "OPTIONS", "PUT", "DELETE"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	r.MaxMultipartMemory = 8 << 20 // 8MB
 
@@ -54,15 +57,22 @@ func main() {
 		defer file.Close()
 
 		ext := strings.ToLower(filepath.Ext(header.Filename))
+		fmt.Printf("File extension: %s\n", ext)
 		if ext != ".jpg" && ext != ".jpeg" && ext != ".png" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Only JPG/PNG images are allowed"})
 			return
 		}
 
 		// Processing Image
+		if _, err := file.Seek(0, 0); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset file pointer"})
+			return
+		}
+
 		srcImage, err := imaging.Decode(file)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to decode image"})
+			fmt.Printf("Image Decode Error: %v\n", err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to decode image: %v", err)})
 			return
 		}
 
@@ -83,7 +93,8 @@ func main() {
 
 		url, err := uploadBufferToSupabase(buf, finalFileName, "image/jpeg")
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to upload image to Supabase"})
+			fmt.Printf("Supabase Upload Error: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to upload image to Supabase: %v", err)})
 			return
 		}
 
@@ -107,10 +118,11 @@ func main() {
 
 func uploadBufferToSupabase(body io.Reader, filename string, contentType string) (string, error) {
 	supabaseUrl := os.Getenv("SUPABASE_URL")
-	supabaseKey := os.Getenv("SUPABASE_KEY")
+	supabaseKey := os.Getenv("SUPABASE_SERVICE_KEY")
 	bucketName := os.Getenv("SUPABASE_BUCKET")
 
 	uploadUrl := fmt.Sprintf("%s/storage/v1/object/%s/%s", supabaseUrl, bucketName, filename)
+	fmt.Printf("Uploading %s to %s\n", filename, uploadUrl)
 
 	req, err := http.NewRequest("PUT", uploadUrl, body)
 	if err != nil {
