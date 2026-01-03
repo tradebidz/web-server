@@ -15,12 +15,24 @@ public class BidController {
     @PostMapping
     public ResponseEntity<?> placeBid(
             @RequestHeader(value = "X-User-Id", defaultValue = "1") String userIdStr,
-            @RequestBody BidRequest request
-    ) {
+            @RequestBody BidRequest request) {
         Integer userId = Integer.parseInt(userIdStr);
         try {
             biddingService.placeBid(userId, request);
             return ResponseEntity.ok("Bid placed successfully");
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
+    @PostMapping("/{productId}/buy-now")
+    public ResponseEntity<?> buyNow(
+            @RequestHeader(value = "X-User-Id", defaultValue = "1") String userIdStr,
+            @PathVariable("productId") Integer productId) {
+        Integer userId = Integer.parseInt(userIdStr);
+        try {
+            biddingService.buyNow(userId, productId);
+            return ResponseEntity.ok("Mua ngay thành công");
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }

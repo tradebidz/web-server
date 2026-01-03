@@ -5,6 +5,7 @@ import com.tradebidz.core_service.core.entity.Bid;
 import com.tradebidz.core_service.core.entity.Product;
 import com.tradebidz.core_service.core.entity.User;
 import com.tradebidz.core_service.core.enums.BidStatus;
+import com.tradebidz.core_service.core.enums.ProductStatus;
 import com.tradebidz.core_service.core.repository.BidRepository;
 import com.tradebidz.core_service.core.repository.ProductRepository;
 import com.tradebidz.core_service.core.repository.UserRepository;
@@ -46,7 +47,7 @@ public class BiddingService {
         }
 
         if (Boolean.TRUE.equals(product.getIsAutoExtend()) &&
-            product.getEndTime().minusMinutes(5).isBefore(now)) {
+                product.getEndTime().minusMinutes(5).isBefore(now)) {
             product.setEndTime(product.getEndTime().plusMinutes(5));
         }
 
@@ -70,8 +71,7 @@ public class BiddingService {
         Integer previousWinnerId = product.getWinnerId();
 
         Optional<Bid> currentLeaderOpt = bidRepo.findTopByProductIdAndStatusOrderByMaxAmountDescTimeAsc(
-                product.getId(), BidStatus.VALID
-        );
+                product.getId(), BidStatus.VALID);
 
         if (currentLeaderOpt.isEmpty()) {
             createBid(product, userId, challengerAmount, challengerMax, req.getIsAutoBid());
@@ -118,13 +118,69 @@ public class BiddingService {
         sendRedisUpdate(product, userId);
     }
 
+    @Transactional
+    public void buyNow(Integer userId, Integer productId) {
+        Product product = productRepo.findByIdWithLock(productId)
+                .orElseThrow(() -> new RuntimeException("Sản phẩm không tồn tại"));
+
+        if (!"ACTIVE".equals(product.getStatus().toString())) {
+            throw new RuntimeException("Sản phẩm không còn trong trạng thái đấu giá");
+        }
+
+        if (product.getBuyNowPrice() == null) {
+            throw new RuntimeException("Sản phẩm này không có giá mua ngay");
+        }
+
+        if (product.getSellerId().equals(userId)) {
+            throw new RuntimeException("Người bán không thể mua sản phẩm của chính mình");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        if (now.isAfter(product.getEndTime())) {
+            throw new RuntimeException("Cuộc đấu giá đã kết thúc");
+        }
+
+        // 1. Update product status to SOLD
+        product.setStatus(ProductStatus.SOLD);
+        product.setWinnerId(userId);
+        product.setCurrentPrice(product.getBuyNowPrice());
+        product.setUpdatedAt(now);
+        productRepo.save(product);
+
+        // 2. Create a bid record for the buy now transaction
+        createBid(product, userId, product.getBuyNowPrice(), product.getBuyNowPrice(), false);
+
+        // 3. Send notifications
+        sendBuyNowEmailNotification(product, userId);
+        sendRedisUpdate(product, userId);
+    }
+
+    private void sendBuyNowEmailNotification(Product product, Integer winnerId) {
+        try {
+            User seller = userRepo.findById(product.getSellerId()).orElse(null);
+            User winner = userRepo.findById(winnerId).orElse(null);
+
+            if (seller != null && winner != null) {
+                notificationService.sendAuctionSuccessEmail(
+                        product.getName(),
+                        product.getBuyNowPrice().toString(),
+                        seller.getEmail(),
+                        winner.getEmail());
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to send buy now notification: " + e.getMessage());
+        }
+    }
+
     private void sendBidPlacedEmailNotification(Product product, Integer newWinnerId, Integer previousWinnerId) {
         try {
             User seller = userRepo.findById(product.getSellerId()).orElse(null);
-            if (seller == null) return;
+            if (seller == null)
+                return;
 
             User newWinner = userRepo.findById(newWinnerId).orElse(null);
-            if (newWinner == null) return;
+            if (newWinner == null)
+                return;
 
             String prevBidderEmail = "";
             if (previousWinnerId != null && !previousWinnerId.equals(newWinnerId)) {
@@ -139,8 +195,7 @@ public class BiddingService {
                     product.getCurrentPrice().toString(),
                     seller.getEmail(),
                     newWinner.getEmail(),
-                    prevBidderEmail
-            );
+                    prevBidderEmail);
         } catch (Exception e) {
             System.err.println("Failed to send bid placed notification: " + e.getMessage());
         }
