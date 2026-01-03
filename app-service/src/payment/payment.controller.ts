@@ -16,7 +16,7 @@ export class PaymentController {
   @UseGuards(AtGuard)
   @Post('create_payment_url')
   async createPaymentUrl(@Req() req, @Body() body: { orderId: number }) {
-    const userId = req.user.userId;
+    const userId = req.user.id;
 
     const order = await this.prisma.orders.findUnique({ where: { id: body.orderId } });
     if (!order) throw new BadRequestException('Order not found');

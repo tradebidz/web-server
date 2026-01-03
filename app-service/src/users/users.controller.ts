@@ -64,16 +64,16 @@ export class UsersController {
 
   @Get('selling')
   getSelling(@Req() req) {
-    return this.usersService.getSellingProducts(req.user.userId);
+    return this.usersService.getSellingProducts(req.user.id);
   }
 
   @Get('sold')
   getSold(@Req() req) {
-    return this.usersService.getSoldProducts(req.user.userId);
+    return this.usersService.getSoldProducts(req.user.id);
   }
 
   @Post('cancel-transaction')
   cancelTransaction(@Req() req, @Body('productId') productId: number) {
-    return this.usersService.cancelTransaction(req.user.userId, productId);
+    return this.usersService.cancelTransaction(req.user.id, productId);
   }
 }

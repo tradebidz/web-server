@@ -9,12 +9,12 @@ export class OrdersController {
 
   @Post()
   create(@Req() req, @Body('productId') productId: number) {
-    return this.ordersService.createOrder(req.user.userId, productId);
+    return this.ordersService.createOrder(req.user.id, productId);
   }
 
 
   @Get(':id')
   findOne(@Req() req, @Param('id') id: string) {
-    return this.ordersService.getOrder(req.user.userId, Number(id));
+    return this.ordersService.getOrder(req.user.id, Number(id));
   }
 }

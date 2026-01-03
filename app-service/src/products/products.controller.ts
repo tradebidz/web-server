@@ -47,6 +47,12 @@ export class ProductsController {
   }
 
   @UseGuards(AtGuard)
+  @Get(':id/seller-bids')
+  getSellerBids(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
+    return this.productsService.getSellerBids(req.user.id, id);
+  }
+
+  @UseGuards(AtGuard)
   @Post(':id/questions')
   createQuestion(@Req() req: any, @Param('id', ParseIntPipe) id: number, @Body('content') content: string) {
     return this.productsService.createQuestion(req.user.id, id, content);
@@ -61,18 +67,18 @@ export class ProductsController {
   @UseGuards(AtGuard)
   @Post(':id/descriptions')
   appendDescription(@Req() req, @Param('id') id: number, @Body() dto: AppendDescriptionDto) {
-    return this.productsService.appendDescription(req.user.userId, id, dto.content);
+    return this.productsService.appendDescription(req.user.id, id, dto.content);
   }
 
   @UseGuards(AtGuard)
   @Post(':id/ban-bidder')
   banBidder(@Req() req, @Param('id') id: number, @Body() dto: BanBidderDto) {
-    return this.productsService.banBidder(req.user.userId, id, dto);
+    return this.productsService.banBidder(req.user.id, id, dto);
   }
 
   @UseGuards(AtGuard)
   @Post('questions/:questionId/answer')
   answerQuestion(@Req() req, @Param('questionId') qId: number, @Body() dto: AnswerQuestionDto) {
-    return this.productsService.answerQuestion(req.user.userId, qId, dto.answer);
+    return this.productsService.answerQuestion(req.user.id, qId, dto.answer);
   }
 }
