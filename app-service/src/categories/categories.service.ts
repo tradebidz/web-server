@@ -10,7 +10,14 @@ export class CategoriesService {
   async findAll() {
     return this.prisma.categories.findMany({
       where: { parent_id: null },
-      include: { other_categories: true }
+      include: {
+        _count: { select: { products: true } },
+        other_categories: {
+          include: {
+            _count: { select: { products: true } }
+          }
+        }
+      }
     })
   }
 }
