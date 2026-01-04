@@ -197,24 +197,61 @@ export class UsersService {
 
     // 3. UPDATED: Get Won Products
     async getWonProducts(userId: number) {
-        const where = Prisma.sql`WHERE p.winner_id = ${userId} AND p.status = 'SOLD'`;
-        return this.getProductsWithRawQuery(where);
+        const products = await this.prisma.products.findMany({
+            where: {
+                winner_id: userId,
+                status: 'SOLD'
+            },
+            include: {
+                product_images: {
+                    where: { is_primary: true }
+                },
+                users_products_seller_idTousers: {
+                    select: { id: true, full_name: true }
+                },
+                orders: true,
+                feedbacks: {
+                    where: { from_user_id: userId }
+                }
+            },
+            orderBy: { updated_at: 'desc' }
+        });
+
+        // Map to maintain frontend compatibility
+        return products.map(p => ({
+            ...p,
+            seller: p.users_products_seller_idTousers,
+            orders: p.orders ? [p.orders] : [] // Convert singular order to array for frontend
+        }));
     }
 
-    async rateSeller(bidderId: number, body: { productId: number, score: number, comment: string }) {
+    async rateTransaction(userId: number, body: { productId: number, score: number, comment: string }) {
         const product = await this.prisma.products.findUnique({ where: { id: body.productId } });
-        if (product?.winner_id !== bidderId) throw new ForbiddenException("You are not the winner of this product.");
-        if (!product.seller_id) throw new BadRequestException("Product does not have a seller.");
+        if (!product) throw new NotFoundException("Product not found");
+
+        let targetUserId: number;
+
+        if (product.winner_id === userId) {
+            // User is winner, rating seller
+            if (!product.seller_id) throw new BadRequestException("Product does not have a seller.");
+            targetUserId = product.seller_id;
+        } else if (product.seller_id === userId) {
+            // User is seller, rating winner
+            if (!product.winner_id) throw new BadRequestException("Product does not have a winner.");
+            targetUserId = product.winner_id;
+        } else {
+            throw new ForbiddenException("You are not part of this transaction.");
+        }
 
         const exist = await this.prisma.feedbacks.findFirst({
-            where: { from_user_id: bidderId, product_id: body.productId }
+            where: { from_user_id: userId, product_id: body.productId }
         });
         if (exist) throw new BadRequestException("You have already rated this transaction.");
 
         await this.prisma.feedbacks.create({
             data: {
-                from_user_id: bidderId,
-                to_user_id: product.seller_id,
+                from_user_id: userId,
+                to_user_id: targetUserId,
                 product_id: body.productId,
                 score: body.score,
                 comment: body.comment
@@ -222,7 +259,7 @@ export class UsersService {
         });
 
         await this.prisma.users.update({
-            where: { id: product.seller_id },
+            where: { id: targetUserId },
             data: { rating_count: { increment: 1 }, rating_score: { increment: body.score } }
         });
 
@@ -264,16 +301,21 @@ export class UsersService {
 
     async getSoldProducts(userId: number) {
         const products = await this.prisma.products.findMany({
-            where: { seller_id: userId, status: 'SOLD' },
+            where: { seller_id: userId, status: { in: ['SOLD', 'CANCELLED'] } },
             include: {
                 product_images: { where: { is_primary: true } },
-                users_products_winner_idTousers: { select: { id: true, full_name: true } }
-            }
+                users_products_winner_idTousers: { select: { id: true, full_name: true } },
+                feedbacks: {
+                    where: { from_user_id: userId }
+                }
+            },
+            orderBy: { updated_at: 'desc' }
         });
 
         return products.map(p => ({
             ...p,
-            winner: p.users_products_winner_idTousers
+            winner: p.users_products_winner_idTousers,
+            is_rated: p.feedbacks.length > 0
         }));
     }
 

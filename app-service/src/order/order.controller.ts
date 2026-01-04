@@ -12,6 +12,10 @@ export class OrdersController {
     return this.ordersService.createOrder(req.user.id, productId);
   }
 
+  @Get()
+  findAll(@Req() req) {
+    return this.ordersService.getOrders(req.user.id);
+  }
 
   @Get(':id')
   findOne(@Req() req, @Param('id') id: string) {

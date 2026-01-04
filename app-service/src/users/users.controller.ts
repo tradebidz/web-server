@@ -53,8 +53,8 @@ export class UsersController {
   }
 
   @Post('rate')
-  rateSeller(@Req() req, @Body() dto: RateSellerDto) {
-    return this.usersService.rateSeller(req.user.id, dto);
+  rateTransaction(@Req() req, @Body() dto: RateSellerDto) {
+    return this.usersService.rateTransaction(req.user.id, dto);
   }
 
   @Post('upgrade')

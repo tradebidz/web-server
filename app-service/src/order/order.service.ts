@@ -55,4 +55,30 @@ export class OrderService {
 
         return order;
     }
+
+    async getOrders(userId: number) {
+        return this.prisma.orders.findMany({
+            where: {
+                OR: [
+                    { buyer_id: userId },
+                    { seller_id: userId }
+                ]
+            },
+            include: {
+                products: {
+                    include: {
+                        product_images: {
+                            where: { is_primary: true }
+                        },
+                        feedbacks: {
+                            where: { from_user_id: userId }
+                        }
+                    }
+                },
+                seller: { select: { id: true, full_name: true } },
+                buyer: { select: { id: true, full_name: true } }
+            },
+            orderBy: { created_at: 'desc' }
+        });
+    }
 }

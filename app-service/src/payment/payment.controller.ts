@@ -56,7 +56,8 @@ export class PaymentController {
       return res.redirect(`${frontendUrl}/orders/${orderId}/success`);
     }
 
-    if (Number(order.amount) !== vnpAmount) {
+    if (Number(order.amount) * 100 !== vnpAmount) {
+      await this.prisma.orders.delete({ where: { id: orderId } });
       return res.redirect('http://localhost:5173/payment/failed?reason=amount_mismatch');
     }
 
