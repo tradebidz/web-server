@@ -28,6 +28,32 @@ export class AdminService {
         return this.prisma.categories.delete({ where: { id } });
     }
 
+    async getAllProducts(page: number = 1, limit: number = 10) {
+        const skip = (page - 1) * limit;
+        const [products, total] = await Promise.all([
+            this.prisma.products.findMany({
+                orderBy: { created_at: 'desc' },
+                skip,
+                take: limit,
+                include: {
+                    categories: true,
+                    users_products_seller_idTousers: {
+                        select: { id: true, full_name: true, email: true }
+                    }
+                }
+            }),
+            this.prisma.products.count(),
+        ]);
+
+        return {
+            data: products,
+            total,
+            page,
+            limit,
+            last_page: Math.ceil(total / limit),
+        };
+    }
+
     async deleteProduct(id: number) {
         return this.prisma.products.update({
             where: { id },
@@ -35,10 +61,26 @@ export class AdminService {
         });
     }
 
-    async getAllUsers() {
-        return this.prisma.users.findMany({
-            orderBy: { created_at: 'desc' }
-        });
+    async getAllUsers(page: number = 1, limit: number = 10) {
+        const skip = (page - 1) * limit;
+        const [users, total] = await Promise.all([
+            this.prisma.users.findMany({
+                orderBy: { created_at: 'desc' },
+                skip,
+                take: limit,
+            }),
+            this.prisma.users.count(),
+        ]);
+
+        return {
+            data: users,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
+        };
     }
 
     async deleteUser(id: number) {

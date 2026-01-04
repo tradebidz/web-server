@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { AtGuard } from 'src/auth/guard';
 import { RolesGuard } from 'src/auth/guard/roles.guard';
@@ -25,14 +25,19 @@ export class AdminController {
     return this.adminService.deleteCategory(Number(id));
   }
 
+  @Get('products')
+  getAllProducts(@Query('page') page: number = 1, @Query('limit') limit: number = 10) {
+    return this.adminService.getAllProducts(Number(page), Number(limit));
+  }
+
   @Delete('products/:id')
   deleteProduct(@Param('id') id: number) {
     return this.adminService.deleteProduct(Number(id));
   }
 
   @Get('users')
-  getAllUsers() {
-    return this.adminService.getAllUsers();
+  getAllUsers(@Query('page') page: number = 1, @Query('limit') limit: number = 10) {
+    return this.adminService.getAllUsers(Number(page), Number(limit));
   }
 
   @Delete('users/:id')
