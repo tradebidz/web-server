@@ -147,7 +147,7 @@ export class UsersService {
         // Join with watchlists table to filter by user_id
         const join = Prisma.sql`JOIN watchlists w ON p.id = w.product_id`;
         const where = Prisma.sql`WHERE w.user_id = ${userId}`;
-        
+
         return this.getProductsWithRawQuery(where, join);
     }
 
@@ -242,14 +242,39 @@ export class UsersService {
 
     // 4. UPDATED: Get Selling Products
     async getSellingProducts(userId: number) {
-        const where = Prisma.sql`WHERE p.seller_id = ${userId} AND p.status = 'ACTIVE'`;
-        return this.getProductsWithRawQuery(where);
+        const products = await this.prisma.products.findMany({
+            where: { seller_id: userId, status: 'ACTIVE' },
+            include: {
+                product_images: { where: { is_primary: true } },
+                _count: { select: { bids: true } },
+                bids: {
+                    orderBy: { amount: 'desc' },
+                    take: 1,
+                    include: { users: { select: { full_name: true } } }
+                }
+            }
+        });
+
+        return products.map(p => ({
+            ...p,
+            bid_count: p._count.bids,
+            current_bidder_name: p.bids[0]?.users?.full_name || null
+        }));
     }
 
-    // 5. UPDATED: Get Sold Products
     async getSoldProducts(userId: number) {
-        const where = Prisma.sql`WHERE p.seller_id = ${userId} AND p.status = 'SOLD'`;
-        return this.getProductsWithRawQuery(where);
+        const products = await this.prisma.products.findMany({
+            where: { seller_id: userId, status: 'SOLD' },
+            include: {
+                product_images: { where: { is_primary: true } },
+                users_products_winner_idTousers: { select: { id: true, full_name: true } }
+            }
+        });
+
+        return products.map(p => ({
+            ...p,
+            winner: p.users_products_winner_idTousers
+        }));
     }
 
     async cancelTransaction(sellerId: number, productId: number) {
