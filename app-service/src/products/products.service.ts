@@ -7,6 +7,8 @@ import Redis from 'ioredis';
 import { ConfigService } from '@nestjs/config';
 import { BanBidderDto } from './dto/ban-bidder.dto';
 import { NotificationService } from 'src/notification/notification.service';
+import { WINSTON_MODULE_NEST_PROVIDER, WinstonLogger } from 'nest-winston';
+import { Inject } from '@nestjs/common';
 
 @Injectable()
 export class ProductsService {
@@ -17,6 +19,7 @@ export class ProductsService {
     private prisma: PrismaService,
     private config: ConfigService,
     private notificationService: NotificationService,
+    @Inject(WINSTON_MODULE_NEST_PROVIDER) private readonly logger: WinstonLogger,
   ) {
     this.redis = new Redis({
       host: this.config.get('REDIS_HOST') || 'localhost',
@@ -53,6 +56,16 @@ export class ProductsService {
         }
       }
     });
+
+    this.logger.log(
+      'Create Product Success',
+      JSON.stringify({
+        productId: newProduct.id,
+        productName: newProduct.name,
+        price: newProduct.start_price,
+        sellerId: userId,
+      }),
+    );
 
     return newProduct;
   }

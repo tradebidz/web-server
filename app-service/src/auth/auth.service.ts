@@ -1,4 +1,6 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Inject, Logger } from '@nestjs/common';
+import { WinstonModule, utilities as nestWinstonModuleUtilities } from 'nest-winston';
+import * as winston from 'winston';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { LoginDto, RegisterDto } from './dto/auth.dto';
@@ -9,9 +11,11 @@ import Redis from 'ioredis';
 import { OAuth2Client } from 'google-auth-library';
 import { NotificationService } from 'src/notification/notification.service';
 
+import { WINSTON_MODULE_NEST_PROVIDER, WinstonLogger } from 'nest-winston';
+
 @Injectable()
 export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
+  // private readonly logger = new Logger(AuthService.name); // Replaced by injected logger
   private redis: Redis;
   private googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -20,6 +24,7 @@ export class AuthService {
     private jwt: JwtService,
     private config: ConfigService,
     private notificationService: NotificationService,
+    @Inject(WINSTON_MODULE_NEST_PROVIDER) private readonly logger: Logger,
   ) {
     this.redis = new Redis({
       host: this.config.get('REDIS_HOST') || 'localhost',
@@ -104,7 +109,14 @@ export class AuthService {
           is_verified: false
         },
       });
-      this.logger.log(`User created successfully: ${newUser.email} (ID: ${newUser.id})`);
+      this.logger.log(
+        'User created successfully',
+        JSON.stringify({
+          email: newUser.email,
+          userId: newUser.id,
+          role: newUser.role
+        })
+      );
 
       // 4. Send OTP
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -154,7 +166,14 @@ export class AuthService {
       const tokens = await this.getTokens(user.id, user.email, role);
       await this.updateRefreshTokenHash(user.id, tokens.refresh_token);
 
-      this.logger.log(`Login successful for user: ${dto.email}`);
+      this.logger.log(
+        'Login successful',
+        JSON.stringify({
+          email: dto.email,
+          userId: user.id,
+          role: role
+        })
+      );
       const { password, hashed_refresh_token, ...safeUser } = user;
       return {
         ...tokens,

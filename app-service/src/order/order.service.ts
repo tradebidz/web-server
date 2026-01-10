@@ -1,9 +1,15 @@
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 
+import { WINSTON_MODULE_NEST_PROVIDER, WinstonLogger } from 'nest-winston';
+import { Inject } from '@nestjs/common';
+
 @Injectable()
 export class OrderService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        @Inject(WINSTON_MODULE_NEST_PROVIDER) private readonly logger: WinstonLogger,
+    ) { }
 
     async createOrder(userId: number, productId: number) {
         const product = await this.prisma.products.findUnique({ where: { id: productId } });
@@ -25,7 +31,7 @@ export class OrderService {
             return existingOrder;
         }
 
-        return this.prisma.orders.create({
+        const order = await this.prisma.orders.create({
             data: {
                 product_id: productId,
                 buyer_id: userId,
@@ -35,6 +41,18 @@ export class OrderService {
                 payment_status: 'UNPAID'
             }
         });
+
+        this.logger.log(
+            'Create Order Success',
+            JSON.stringify({
+                orderId: order.id,
+                productId: order.product_id,
+                buyerId: order.buyer_id,
+                amount: order.amount
+            })
+        );
+
+        return order;
     }
 
     async getOrder(userId: number, orderId: number) {
