@@ -200,7 +200,7 @@ export class UsersService {
         const products = await this.prisma.products.findMany({
             where: {
                 winner_id: userId,
-                status: 'SOLD'
+                status: { in: ['SOLD', 'EXPIRED'] }
             },
             include: {
                 product_images: {

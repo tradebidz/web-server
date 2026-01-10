@@ -75,7 +75,7 @@ export class PaymentController {
 
     if (rspCode === '00') {
       // Payment success
-      const updatedOrder = await this.prisma.orders.update({
+      await this.prisma.orders.update({
         where: { id: orderId },
         data: {
           payment_status: 'PAID',
@@ -85,13 +85,11 @@ export class PaymentController {
         }
       });
 
-      // Update Product Status to SOLD
-      if (updatedOrder.product_id) {
-        await this.prisma.products.update({
-          where: { id: updatedOrder.product_id },
-          data: { status: 'SOLD' }
-        });
-      }
+      // Update product status to SOLD
+      await this.prisma.products.update({
+        where: { id: order.product_id },
+        data: { status: 'SOLD' }
+      });
 
       return res.redirect(`${frontendUrl}/orders/${orderId}/success`);
     } else {
