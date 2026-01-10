@@ -12,10 +12,42 @@ import { AdminModule } from './admin/admin.module';
 import { NotificationModule } from './notification/notification.module';
 import { PaymentModule } from './payment/payment.module';
 import { OrderModule } from './order/order.module';
+import { WinstonModule, utilities as nestWinstonModuleUtilities } from 'nest-winston';
+import * as winston from 'winston';
+import { ElasticsearchTransport } from 'winston-elasticsearch';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    WinstonModule.forRoot({
+      transports: [
+        new winston.transports.Console({
+          format: winston.format.combine(
+            winston.format.timestamp(),
+            winston.format.ms(),
+            nestWinstonModuleUtilities.format.nestLike('TradeBidz', {
+              prettyPrint: true,
+            }),
+          ),
+        }),
+        new ElasticsearchTransport({
+          level: 'info',
+          clientOpts: {
+            node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200',
+          },
+          transformer: (logData) => {
+            const transformed = {
+              '@timestamp': new Date().toISOString(),
+              severity: logData.level,
+              service: 'app-service',
+              message: logData.message,
+              meta: logData.meta,
+            };
+            return transformed;
+          },
+        }),
+      ],
+    }),
     PrismaModule,
     NotificationModule,
     AuthModule,
