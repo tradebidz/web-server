@@ -356,6 +356,8 @@ export class UsersService {
             }
         });
 
+        if (!product.winner_id) throw new BadRequestException("No winner to cancel transaction for");
+
         await this.prisma.users.update({
             where: { id: product.winner_id },
             data: { rating_count: { increment: 1 }, rating_score: { increment: -1 } }
