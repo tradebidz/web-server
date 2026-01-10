@@ -190,6 +190,7 @@ export class UsersService {
         // Use EXISTS to find products where the user has placed a bid
         const where = Prisma.sql`
             WHERE p.status = 'ACTIVE' 
+            AND p.end_time > NOW()
             AND EXISTS (SELECT 1 FROM bids b WHERE b.product_id = p.id AND b.bidder_id = ${userId})
         `;
         return this.getProductsWithRawQuery(where);
@@ -199,8 +200,10 @@ export class UsersService {
     async getWonProducts(userId: number) {
         const products = await this.prisma.products.findMany({
             where: {
-                winner_id: userId,
-                status: { in: ['SOLD', 'EXPIRED'] }
+                OR: [
+                    { winner_id: userId, status: { in: ['SOLD', 'EXPIRED'] } },
+                    { winner_id: userId, status: 'ACTIVE', end_time: { lt: new Date() } }
+                ]
             },
             include: {
                 product_images: {
