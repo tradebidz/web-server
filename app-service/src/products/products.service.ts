@@ -368,14 +368,14 @@ export class ProductsService {
 
     const maskedBids = bids.map(bid => {
       const fullName = bid.users?.full_name || "Unknown";
-      const parts = fullName.trim().split(' ');
+      const parts = fullName.trim().split(/\s+/); // Split by any whitespace
       const lastName = parts[parts.length - 1];
 
       return {
         id: bid.id,
         time: bid.time,
         amount: bid.amount,
-        bidder_name: `**** ${lastName}`
+        bidder_name: `****${lastName}` // Changed from `**** ${lastName}` to `****${lastName}`
       }
     });
     return maskedBids;
