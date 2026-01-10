@@ -304,7 +304,13 @@ export class UsersService {
 
     async getSoldProducts(userId: number) {
         const products = await this.prisma.products.findMany({
-            where: { seller_id: userId, status: { in: ['SOLD', 'CANCELLED'] } },
+            where: {
+                seller_id: userId,
+                OR: [
+                    { status: { in: ['SOLD', 'CANCELLED'] } },
+                    { status: { in: ['ACTIVE', 'EXPIRED'] }, end_time: { lt: new Date() }, winner_id: { not: null } }
+                ]
+            },
             include: {
                 product_images: { where: { is_primary: true } },
                 users_products_winner_idTousers: { select: { id: true, full_name: true } },
@@ -327,7 +333,13 @@ export class UsersService {
 
         if (!product) throw new NotFoundException("Product not found");
         if (product.seller_id !== sellerId) throw new ForbiddenException("You don't have permission");
-        if (product.status !== 'SOLD' || !product.winner_id) throw new BadRequestException("Product is not sold");
+
+        const isSold = product.status === 'SOLD';
+        const isPendingPayment = (product.status === 'ACTIVE' || product.status === 'EXPIRED') &&
+            product.winner_id &&
+            new Date(product.end_time) < new Date();
+
+        if (!isSold && !isPendingPayment) throw new BadRequestException("Product is not sold or pending payment");
 
         await this.prisma.products.update({
             where: { id: productId },
