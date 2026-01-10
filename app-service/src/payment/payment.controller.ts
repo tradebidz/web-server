@@ -1,10 +1,12 @@
 import { BadRequestException, Body, Controller, ForbiddenException, Get, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { PaymentService } from './payment.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { AtGuard } from 'src/auth/guard';
 import { ConfigService } from '@nestjs/config';
 import type { Response } from 'express';
 
+@ApiTags('Payment')
 @Controller('payment')
 export class PaymentController {
   constructor(
@@ -14,7 +16,14 @@ export class PaymentController {
   ) { }
 
   @UseGuards(AtGuard)
+  @ApiBearerAuth('JWT-auth')
   @Post('create_payment_url')
+  @ApiOperation({ summary: 'Create payment URL', description: 'Generate VNPay payment URL for an order' })
+  @ApiBody({ schema: { type: 'object', properties: { orderId: { type: 'number', description: 'Order ID' } } } })
+  @ApiResponse({ status: 201, description: 'Payment URL created successfully' })
+  @ApiResponse({ status: 400, description: 'Order not found or already paid' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Not the order buyer' })
   async createPaymentUrl(@Req() req, @Body() body: { orderId: number }) {
     const userId = req.user.id;
 
@@ -35,6 +44,8 @@ export class PaymentController {
   }
 
   @Get('vnpay_return')
+  @ApiOperation({ summary: 'VNPay return', description: 'Handle VNPay payment callback' })
+  @ApiResponse({ status: 302, description: 'Redirect to frontend with payment result' })
   async vnpayReturn(@Query() query, @Res() res: Response) {
     const isValid = this.paymentService.verifyReturnUrl(query);
     const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:5173';
