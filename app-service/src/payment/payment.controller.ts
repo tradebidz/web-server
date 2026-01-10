@@ -47,6 +47,7 @@ export class PaymentController {
   @ApiOperation({ summary: 'VNPay return', description: 'Handle VNPay payment callback' })
   @ApiResponse({ status: 302, description: 'Redirect to frontend with payment result' })
   async vnpayReturn(@Query() query, @Res() res: Response) {
+    console.log("VNPayment Return Query:", query);
     const isValid = this.paymentService.verifyReturnUrl(query);
     const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:5173';
 
@@ -74,7 +75,7 @@ export class PaymentController {
 
     if (rspCode === '00') {
       // Payment success
-      await this.prisma.orders.update({
+      const updatedOrder = await this.prisma.orders.update({
         where: { id: orderId },
         data: {
           payment_status: 'PAID',
@@ -83,6 +84,14 @@ export class PaymentController {
           status: 'PAID'
         }
       });
+
+      // Update Product Status to SOLD
+      if (updatedOrder.product_id) {
+        await this.prisma.products.update({
+          where: { id: updatedOrder.product_id },
+          data: { status: 'SOLD' }
+        });
+      }
 
       return res.redirect(`${frontendUrl}/orders/${orderId}/success`);
     } else {

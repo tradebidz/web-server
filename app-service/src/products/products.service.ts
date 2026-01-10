@@ -27,6 +27,14 @@ export class ProductsService {
     });
   }
 
+  // Helper function to mask bidder names
+  private maskBidderName(fullName: string | null | undefined): string | null {
+    if (!fullName) return null;
+    const parts = fullName.trim().split(/\s+/);
+    const lastName = parts[parts.length - 1];
+    return `****${lastName}`;
+  }
+
   async createProduct(userId: number, dto: CreateProductDto) {
     const user = await this.prisma.users.findUnique({
       where: { id: userId }
@@ -221,8 +229,17 @@ export class ProductsService {
     // increase product view count
     await this.prisma.products.update({ where: { id }, data: { view_count: { increment: 1 } } });
 
+    // Mask bidder names in bids
+    const maskedBids = product.bids.map(bid => ({
+      ...bid,
+      users: bid.users ? {
+        full_name: this.maskBidderName(bid.users.full_name)
+      } : null
+    }));
+
     return {
       ...product,
+      bids: maskedBids,
       related_products: relatedProducts,
     };
   }
@@ -254,7 +271,7 @@ export class ProductsService {
     return products.map(p => ({
       ...p,
       bid_count: p._count.bids,
-      current_bidder_name: p.bids[0]?.users?.full_name
+      current_bidder_name: this.maskBidderName(p.bids[0]?.users?.full_name)
     }));
   }
 
@@ -285,7 +302,7 @@ export class ProductsService {
     return products.map(p => ({
       ...p,
       bid_count: p._count.bids,
-      current_bidder_name: p.bids[0]?.users?.full_name
+      current_bidder_name: this.maskBidderName(p.bids[0]?.users?.full_name)
     }));
   }
 
@@ -316,7 +333,7 @@ export class ProductsService {
     return products.map(p => ({
       ...p,
       bid_count: p._count.bids,
-      current_bidder_name: p.bids[0]?.users?.full_name
+      current_bidder_name: this.maskBidderName(p.bids[0]?.users?.full_name)
     }));
   }
 
@@ -366,18 +383,12 @@ export class ProductsService {
       }
     });
 
-    const maskedBids = bids.map(bid => {
-      const fullName = bid.users?.full_name || "Unknown";
-      const parts = fullName.trim().split(/\s+/); // Split by any whitespace
-      const lastName = parts[parts.length - 1];
-
-      return {
-        id: bid.id,
-        time: bid.time,
-        amount: bid.amount,
-        bidder_name: `****${lastName}` // Changed from `**** ${lastName}` to `****${lastName}`
-      }
-    });
+    const maskedBids = bids.map(bid => ({
+      id: bid.id,
+      time: bid.time,
+      amount: bid.amount,
+      bidder_name: this.maskBidderName(bid.users?.full_name)
+    }));
     return maskedBids;
   }
 
