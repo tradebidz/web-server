@@ -226,9 +226,16 @@ func startEmailWorker() {
 					price, _ := values["price"].(string)
 					sellerEmail, _ := values["seller_email"].(string)
 					winnerEmail, _ := values["winner_email"].(string)
+
+					// New Fields
+					productId, _ := values["product_id"].(string)
+					sellerName, _ := values["seller_name"].(string)
+					winnerName, _ := values["winner_name"].(string)
+					winnerAddress, _ := values["winner_address"].(string)
+
 					fmt.Printf("Sending auction success emails for %s...\n", productName)
 
-					err := sendAuctionSuccessEmail(sellerEmail, winnerEmail, productName, price)
+					err := sendAuctionSuccessEmail(sellerEmail, winnerEmail, productName, price, productId, sellerName, winnerName, winnerAddress)
 					if err != nil {
 						fmt.Printf("Failed to send auction success emails: %v\n", err)
 					}
@@ -413,36 +420,67 @@ func sendBidRejectedEmail(bidderEmail, productName, reason string) error {
 	return sendEmailViaGmail(bidderEmail, subject, html)
 }
 
-func sendAuctionSuccessEmail(sellerEmail, winnerEmail, productName, price string) error {
+func sendAuctionSuccessEmail(sellerEmail, winnerEmail, productName, price, productId, sellerName, winnerName, winnerAddress string) error {
+	// Base URL for links (adjust port if needed, assuming default Vite port)
+	baseUrl := "http://localhost:5173"
+
 	// 1. Send to Seller
-	sellerSubject := "Congratulations! Your Auction Sold Successfully"
+	sellerSubject := "Action Required: Your Auction Sold Successfully - " + productName
 	sellerHtml := fmt.Sprintf(`
 		<html>
-		<body>
-			<h2>🎉 Auction Successful!</h2>
+		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+			<h2 style="color: #28a745;">🎉 Auction Successful!</h2>
 			<p>Congratulations! Your auction for <strong>%s</strong> has ended successfully.</p>
-			<p>Final sale price: <strong>$%s</strong></p>
-			<p>The winning bidder will be contacted shortly. Please log in to your account to view the winner's details and complete the transaction.</p>
+			
+			<div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+				<h3 style="margin-top: 0;">Transaction Details</h3>
+				<p><strong>Final Price:</strong> <span style="font-size: 1.2em; color: #dc3545;">$%s</span></p>
+				<hr style="border: 0; border-top: 1px solid #dee2e6;">
+				<h3 style="margin-top: 10px;">Winner Information</h3>
+				<p><strong>Name:</strong> %s</p>
+				<p><strong>Email:</strong> <a href="mailto:%s">%s</a></p>
+				<p><strong>Address:</strong> %s</p>
+			</div>
+
+			<p>Please contact the winner to arrange payment and delivery, or click the link below to view the order details.</p>
+			
+			<p style="text-align: center;">
+				<a href="%s/products/%s" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">View Order Details</a>
+			</p>
 		</body>
 		</html>
-	`, productName, price)
+	`, productName, price, winnerName, winnerEmail, winnerEmail, winnerAddress, baseUrl, productId)
+
 	if err := sendEmailViaGmail(sellerEmail, sellerSubject, sellerHtml); err != nil {
 		fmt.Printf("Error sending to seller: %v\n", err)
 	}
 
 	// 2. Send to Winner
-	winnerSubject := "Congratulations! You Won the Auction"
+	winnerSubject := "You Won! Complete Your Purchase for " + productName
 	winnerHtml := fmt.Sprintf(`
 		<html>
-		<body>
-			<h2>🏆 You Won!</h2>
-			<p>Congratulations! You have won the auction for <strong>%s</strong>!</p>
-			<p>Your winning bid: <strong>$%s</strong></p>
-			<p>The seller will contact you shortly to arrange payment and delivery. Please log in to your account for more details.</p>
-			<p>Thank you for using TradeBidz!</p>
+		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+			<h2 style="color: #ffc107;">🏆 You Won the Auction!</h2>
+			<p>Congratulations! You are the winner of the auction for <strong>%s</strong>.</p>
+			
+			<div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+				<h3 style="margin-top: 0;">Your Winning Bid</h3>
+				<p><strong>Amount:</strong> <span style="font-size: 1.2em; color: #dc3545;">$%s</span></p>
+				<hr style="border: 0; border-top: 1px solid #dee2e6;">
+				<h3 style="margin-top: 10px;">Seller Information</h3>
+				<p><strong>Name:</strong> %s</p>
+				<p><strong>Email:</strong> <a href="mailto:%s">%s</a></p>
+			</div>
+
+			<p>Please complete your order by contacting the seller or proceeding to the payment page.</p>
+			
+			<p style="text-align: center;">
+				<a href="%s/products/%s" style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Complete Order Now</a>
+			</p>
 		</body>
 		</html>
-	`, productName, price)
+	`, productName, price, sellerName, sellerEmail, sellerEmail, baseUrl, productId)
+
 	if err := sendEmailViaGmail(winnerEmail, winnerSubject, winnerHtml); err != nil {
 		fmt.Printf("Error sending to winner: %v\n", err)
 	}

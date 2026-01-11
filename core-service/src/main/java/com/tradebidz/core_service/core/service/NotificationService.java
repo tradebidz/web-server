@@ -44,18 +44,26 @@ public class NotificationService {
     }
 
     public void sendAuctionSuccessEmail(
+            Integer productId,
             String productName,
             String price,
             String sellerEmail,
-            String winnerEmail
+            String sellerName,
+            String winnerEmail,
+            String winnerName,
+            String winnerAddress
     ) {
         try {
             Map<String, String> data = new HashMap<>();
             data.put("type", "AUCTION_SUCCESS");
+            data.put("product_id", productId.toString());
             data.put("product_name", productName);
             data.put("price", price);
             data.put("seller_email", sellerEmail);
+            data.put("seller_name", sellerName);
             data.put("winner_email", winnerEmail);
+            data.put("winner_name", winnerName);
+            data.put("winner_address", winnerAddress != null ? winnerAddress : "N/A");
 
             MapRecord<String, String, String> record = StreamRecords.mapBacked(data)
                     .withStreamKey(NOTIFICATION_STREAM);

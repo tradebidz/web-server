@@ -174,10 +174,14 @@ public class BiddingService {
 
             if (seller != null && winner != null) {
                 notificationService.sendAuctionSuccessEmail(
+                        product.getId(),
                         product.getName(),
                         product.getBuyNowPrice().toString(),
                         seller.getEmail(),
-                        winner.getEmail());
+                        seller.getFullName(),
+                        winner.getEmail(),
+                        winner.getFullName(),
+                        winner.getAddress());
             }
         } catch (Exception e) {
             System.err.println("Failed to send buy now notification: " + e.getMessage());

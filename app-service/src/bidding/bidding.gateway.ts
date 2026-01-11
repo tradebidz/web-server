@@ -69,11 +69,11 @@ export class BiddingGateway implements OnGatewayInit, OnGatewayConnection, OnGat
     }
 
     handleConnection(client: any) {
-        this.logger.log(`Client connected: ${client.id}`);
+        // this.logger.log(`Client connected: ${client.id}`);
     }
 
     handleDisconnect(client: any) {
-        this.logger.log(`Client disconnected: ${client.id}`);
+        // this.logger.log(`Client disconnected: ${client.id}`);
     }
 }
 
