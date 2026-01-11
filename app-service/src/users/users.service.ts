@@ -109,11 +109,29 @@ export class UsersService {
             where: { user_id: userId, status: 'PENDING' }
         });
 
-        return { ...user, has_pending_upgrade_request: !!pendingRequest };
+        // Calculate actual rating from feedbacks
+        const [positiveFeedbacks, totalFeedbacks] = await Promise.all([
+            this.prisma.feedbacks.count({
+                where: { to_user_id: userId, score: 1 }
+            }),
+            this.prisma.feedbacks.count({
+                where: { to_user_id: userId }
+            })
+        ]);
+
+        // Calculate percentage: (positive / total) * 100
+        const rating_score = totalFeedbacks > 0 ? (positiveFeedbacks / totalFeedbacks) * 100 : 0;
+
+        return {
+            ...user,
+            rating_score,
+            rating_count: totalFeedbacks,
+            has_pending_upgrade_request: !!pendingRequest
+        };
     }
 
     async updateUser(userId: number, dto: UpdateUserDto) {
-        return this.prisma.users.update({
+        const user = await this.prisma.users.update({
             where: { id: userId },
             data: { ...dto },
             select: {
@@ -122,6 +140,24 @@ export class UsersService {
                 created_at: true, updated_at: true,
             }
         });
+
+        // Calculate actual rating from feedbacks
+        const [positiveFeedbacks, totalFeedbacks] = await Promise.all([
+            this.prisma.feedbacks.count({
+                where: { to_user_id: userId, score: 1 }
+            }),
+            this.prisma.feedbacks.count({
+                where: { to_user_id: userId }
+            })
+        ]);
+
+        const rating_score = totalFeedbacks > 0 ? (positiveFeedbacks / totalFeedbacks) * 100 : 0;
+
+        return {
+            ...user,
+            rating_score,
+            rating_count: totalFeedbacks
+        };
     }
 
     async toggleWatchlist(userId: number, productId: number) {
@@ -164,7 +200,7 @@ export class UsersService {
             dataToUpdate.password = await bcrypt.hash(password, 10);
         }
 
-        return this.prisma.users.update({
+        const user = await this.prisma.users.update({
             where: { id: userId },
             data: dataToUpdate,
             select: {
@@ -173,6 +209,24 @@ export class UsersService {
                 created_at: true, updated_at: true,
             }
         });
+
+        // Calculate actual rating from feedbacks
+        const [positiveFeedbacks, totalFeedbacks] = await Promise.all([
+            this.prisma.feedbacks.count({
+                where: { to_user_id: userId, score: 1 }
+            }),
+            this.prisma.feedbacks.count({
+                where: { to_user_id: userId }
+            })
+        ]);
+
+        const rating_score = totalFeedbacks > 0 ? (positiveFeedbacks / totalFeedbacks) * 100 : 0;
+
+        return {
+            ...user,
+            rating_score,
+            rating_count: totalFeedbacks
+        };
     }
 
     async getMyFeedbacks(userId: number) {
@@ -313,9 +367,22 @@ export class UsersService {
             },
             include: {
                 product_images: { where: { is_primary: true } },
+                _count: { select: { bids: true } },
                 users_products_winner_idTousers: { select: { id: true, full_name: true } },
                 feedbacks: {
                     where: { from_user_id: userId }
+                },
+                orders: {
+                    select: {
+                        id: true,
+                        status: true,
+                        payment_status: true,
+                        payment_receipt_url: true,
+                        shipping_tracking_code: true,
+                        shipping_company: true,
+                        shipping_tracking_url: true,
+                        created_at: true
+                    }
                 }
             },
             orderBy: { updated_at: 'desc' }
@@ -324,6 +391,7 @@ export class UsersService {
         return products.map(p => ({
             ...p,
             winner: p.users_products_winner_idTousers,
+            bid_count: p._count.bids,
             is_rated: p.feedbacks.length > 0
         }));
     }
