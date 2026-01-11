@@ -13,16 +13,18 @@ import (
 	"net/smtp"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
-
-	_ "golang.org/x/image/webp"
 
 	"github.com/disintegration/imaging"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/redis/go-redis/v9"
+	_ "golang.org/x/image/webp"
+	"golang.org/x/text/language"
+	"golang.org/x/text/message"
 )
 
 const (
@@ -302,6 +304,16 @@ func startEmailWorker() {
 	}
 }
 
+// --- HELPER FUNCTION ---
+func formatCurrencyVND(amountStr string) string {
+	amount, err := strconv.ParseFloat(amountStr, 64)
+	if err != nil {
+		return amountStr + " đ"
+	}
+	p := message.NewPrinter(language.Vietnamese)
+	return p.Sprintf("%.0f đ", amount)
+}
+
 // --- SMTP HELPER FUNCTION ---
 
 func sendEmailViaGmail(to string, subject string, htmlBody string) error {
@@ -335,14 +347,14 @@ func sendEmailViaGmail(to string, subject string, htmlBody string) error {
 }
 
 func sendVerificationEmail(to string, otp string) error {
-	subject := "Email Verification - Your OTP Code"
+	subject := "Xác thực Email - Mã OTP của bạn"
 	html := fmt.Sprintf(`
 		<html>
 		<body>
-			<h2>Email Verification</h2>
-			<p>Your OTP code is: <strong>%s</strong></p>
-			<p>This code will expire in 10 minutes.</p>
-			<p>If you did not request this code, please ignore this email.</p>
+			<h2>Xác thực Email</h2>
+			<p>Mã OTP của bạn là: <strong>%s</strong></p>
+			<p>Mã này sẽ hết hạn trong 10 phút.</p>
+			<p>Nếu bạn không yêu cầu mã này, vui lòng bỏ qua email này.</p>
 		</body>
 		</html>
 	`, otp)
@@ -351,15 +363,15 @@ func sendVerificationEmail(to string, otp string) error {
 }
 
 func sendResetPasswordEmail(to string, otp string) error {
-	subject := "Password Reset - Your OTP Code"
+	subject := "Đặt lại mật khẩu - Mã OTP của bạn"
 	html := fmt.Sprintf(`
 		<html>
 		<body>
-			<h2>Password Reset Request</h2>
-			<p>You have requested to reset your password.</p>
-			<p>Your OTP code is: <strong>%s</strong></p>
-			<p>This code will expire in 10 minutes.</p>
-			<p>If you did not request a password reset, please ignore this email and your password will remain unchanged.</p>
+			<h2>Yêu cầu đặt lại mật khẩu</h2>
+			<p>Bạn đã yêu cầu đặt lại mật khẩu của mình.</p>
+			<p>Mã OTP của bạn là: <strong>%s</strong></p>
+			<p>Mã này sẽ hết hạn trong 10 phút.</p>
+			<p>Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này.</p>
 		</body>
 		</html>
 	`, otp)
@@ -368,52 +380,54 @@ func sendResetPasswordEmail(to string, otp string) error {
 }
 
 func sendBidPlacedEmail(sellerEmail, bidderEmail, prevBidderEmail, productName, newPrice string) error {
+	formattedPrice := formatCurrencyVND(newPrice)
+
 	// 1. Send to Seller
-	sellerSubject := "New Bid Placed on Your Product"
+	sellerSubject := "Giá thầu mới cho sản phẩm của bạn"
 	sellerHtml := fmt.Sprintf(`
 		<html>
 		<body>
-			<h2>New Bid Received!</h2>
-			<p>Great news! A new bid has been placed on your product: <strong>%s</strong></p>
-			<p>New bid amount: <strong>$%s</strong></p>
-			<p>Log in to your account to view the bidder details and manage your auction.</p>
+			<h2>Đã nhận được giá thầu mới!</h2>
+			<p>Tin tuyệt vời! Một giá thầu mới đã được đặt cho sản phẩm của bạn: <strong>%s</strong></p>
+			<p>Số tiền thầu mới: <strong>%s</strong></p>
+			<p>Đăng nhập vào tài khoản của bạn để xem chi tiết người đấu giá và quản lý phiên đấu giá.</p>
 		</body>
 		</html>
-	`, productName, newPrice)
+	`, productName, formattedPrice)
 	if err := sendEmailViaGmail(sellerEmail, sellerSubject, sellerHtml); err != nil {
 		fmt.Printf("Error sending to seller: %v\n", err) // Log but continue
 	}
 
 	// 2. Send to Current Bidder
-	bidderSubject := "Bid Confirmation - " + productName
+	bidderSubject := "Xác nhận đấu giá - " + productName
 	bidderHtml := fmt.Sprintf(`
 		<html>
 		<body>
-			<h2>Bid Placed Successfully!</h2>
-			<p>Your bid has been successfully placed on: <strong>%s</strong></p>
-			<p>Your bid amount: <strong>$%s</strong></p>
-			<p>You are currently the highest bidder. We'll notify you if someone outbids you.</p>
-			<p>Good luck!</p>
+			<h2>Đặt giá thầu thành công!</h2>
+			<p>Bạn đã đặt giá thầu thành công cho sản phẩm: <strong>%s</strong></p>
+			<p>Số tiền thầu của bạn: <strong>%s</strong></p>
+			<p>Hiện bạn là người trả giá cao nhất. Chúng tôi sẽ thông báo nếu có ai đó trả giá cao hơn bạn.</p>
+			<p>Chúc bạn may mắn!</p>
 		</body>
 		</html>
-	`, productName, newPrice)
+	`, productName, formattedPrice)
 	if err := sendEmailViaGmail(bidderEmail, bidderSubject, bidderHtml); err != nil {
 		fmt.Printf("Error sending to bidder: %v\n", err)
 	}
 
 	// 3. Send to Previous Bidder (if exists)
 	if prevBidderEmail != "" {
-		prevSubject := "You've Been Outbid - " + productName
+		prevSubject := "Bạn đã bị vượt giá - " + productName
 		prevHtml := fmt.Sprintf(`
 			<html>
 			<body>
-				<h2>You've Been Outbid</h2>
-				<p>Someone has placed a higher bid on: <strong>%s</strong></p>
-				<p>New highest bid: <strong>$%s</strong></p>
-				<p>Don't miss out! Place a higher bid to stay in the running.</p>
+				<h2>Bạn đã bị vượt giá</h2>
+				<p>Ai đó đã đặt giá cao hơn cho sản phẩm: <strong>%s</strong></p>
+				<p>Giá thầu cao nhất hiện tại: <strong>%s</strong></p>
+				<p>Đừng bỏ lỡ! Hãy đặt giá cao hơn để tiếp tục tham gia.</p>
 			</body>
 			</html>
-		`, productName, newPrice)
+		`, productName, formattedPrice)
 		if err := sendEmailViaGmail(prevBidderEmail, prevSubject, prevHtml); err != nil {
 			fmt.Printf("Error sending to prev bidder: %v\n", err)
 		}
@@ -423,14 +437,14 @@ func sendBidPlacedEmail(sellerEmail, bidderEmail, prevBidderEmail, productName, 
 }
 
 func sendBidRejectedEmail(bidderEmail, productName, reason string) error {
-	subject := "Bid Rejected - " + productName
+	subject := "Giá thầu bị từ chối - " + productName
 	html := fmt.Sprintf(`
 		<html>
 		<body>
-			<h2>Bid Rejected</h2>
-			<p>Unfortunately, your bid on <strong>%s</strong> has been rejected by the seller.</p>
-			<p>Reason: <em>%s</em></p>
-			<p>We apologize for any inconvenience. Please feel free to browse other auctions on TradeBidz.</p>
+			<h2>Giá thầu bị từ chối</h2>
+			<p>Rất tiếc, giá thầu của bạn cho sản phẩm <strong>%s</strong> đã bị người bán từ chối.</p>
+			<p>Lý do: <em>%s</em></p>
+			<p>Chúng tôi xin lỗi vì sự bất tiện này. Vui lòng tham khảo các phiên đấu giá khác trên TradeBidz.</p>
 		</body>
 		</html>
 	`, productName, reason)
@@ -441,63 +455,64 @@ func sendBidRejectedEmail(bidderEmail, productName, reason string) error {
 func sendAuctionSuccessEmail(sellerEmail, winnerEmail, productName, price, productId, sellerName, winnerName, winnerAddress string) error {
 	// Base URL for links (adjust port if needed, assuming default Vite port)
 	baseUrl := "http://localhost:5173"
+	formattedPrice := formatCurrencyVND(price)
 
 	// 1. Send to Seller
-	sellerSubject := "Action Required: Your Auction Sold Successfully - " + productName
+	sellerSubject := "Hành động cần thiết: Đấu giá thành công - " + productName
 	sellerHtml := fmt.Sprintf(`
 		<html>
 		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-			<h2 style="color: #28a745;">🎉 Auction Successful!</h2>
-			<p>Congratulations! Your auction for <strong>%s</strong> has ended successfully.</p>
+			<h2 style="color: #28a745;">🎉 Đấu giá thành công!</h2>
+			<p>Chúc mừng! Phiên đấu giá cho sản phẩm <strong>%s</strong> của bạn đã kết thúc thành công.</p>
 			
 			<div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
-				<h3 style="margin-top: 0;">Transaction Details</h3>
-				<p><strong>Final Price:</strong> <span style="font-size: 1.2em; color: #dc3545;">$%s</span></p>
+				<h3 style="margin-top: 0;">Chi tiết giao dịch</h3>
+				<p><strong>Giá cuối cùng:</strong> <span style="font-size: 1.2em; color: #dc3545;">%s</span></p>
 				<hr style="border: 0; border-top: 1px solid #dee2e6;">
-				<h3 style="margin-top: 10px;">Winner Information</h3>
-				<p><strong>Name:</strong> %s</p>
+				<h3 style="margin-top: 10px;">Thông tin người thắng</h3>
+				<p><strong>Tên:</strong> %s</p>
 				<p><strong>Email:</strong> <a href="mailto:%s">%s</a></p>
-				<p><strong>Address:</strong> %s</p>
+				<p><strong>Địa chỉ:</strong> %s</p>
 			</div>
 
-			<p>Please contact the winner to arrange payment and delivery, or click the link below to view the order details.</p>
+			<p>Vui lòng liên hệ với người thắng để sắp xếp thanh toán và giao hàng, hoặc nhấp vào liên kết bên dưới để xem chi tiết đơn hàng.</p>
 			
 			<p style="text-align: center;">
-				<a href="%s/products/%s" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">View Order Details</a>
+				<a href="%s/products/%s" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Xem chi tiết đơn hàng</a>
 			</p>
 		</body>
 		</html>
-	`, productName, price, winnerName, winnerEmail, winnerEmail, winnerAddress, baseUrl, productId)
+	`, productName, formattedPrice, winnerName, winnerEmail, winnerEmail, winnerAddress, baseUrl, productId)
 
 	if err := sendEmailViaGmail(sellerEmail, sellerSubject, sellerHtml); err != nil {
 		fmt.Printf("Error sending to seller: %v\n", err)
 	}
 
 	// 2. Send to Winner
-	winnerSubject := "You Won! Complete Your Purchase for " + productName
+	winnerSubject := "Bạn đã thắng! Hoàn tất đơn hàng cho " + productName
 	winnerHtml := fmt.Sprintf(`
 		<html>
 		<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-			<h2 style="color: #ffc107;">🏆 You Won the Auction!</h2>
-			<p>Congratulations! You are the winner of the auction for <strong>%s</strong>.</p>
+			<h2 style="color: #ffc107;">🏆 Bạn đã thắng phiên đấu giá!</h2>
+			<p>Chúc mừng! Bạn là người chiến thắng phiên đấu giá cho sản phẩm <strong>%s</strong>.</p>
 			
 			<div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
-				<h3 style="margin-top: 0;">Your Winning Bid</h3>
-				<p><strong>Amount:</strong> <span style="font-size: 1.2em; color: #dc3545;">$%s</span></p>
+				<h3 style="margin-top: 0;">Giá thầu chiến thắng</h3>
+				<p><strong>Số tiền:</strong> <span style="font-size: 1.2em; color: #dc3545;">%s</span></p>
 				<hr style="border: 0; border-top: 1px solid #dee2e6;">
-				<h3 style="margin-top: 10px;">Seller Information</h3>
-				<p><strong>Name:</strong> %s</p>
+				<h3 style="margin-top: 10px;">Thông tin người bán</h3>
+				<p><strong>Tên:</strong> %s</p>
 				<p><strong>Email:</strong> <a href="mailto:%s">%s</a></p>
 			</div>
 
-			<p>Please complete your order by contacting the seller or proceeding to the payment page.</p>
+			<p>Vui lòng hoàn tất đơn hàng bằng cách liên hệ với người bán hoặc tiến hành thanh toán.</p>
 			
 			<p style="text-align: center;">
-				<a href="%s/products/%s" style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Complete Order Now</a>
+				<a href="%s/products/%s" style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Hoàn tất đơn hàng ngay</a>
 			</p>
 		</body>
 		</html>
-	`, productName, price, sellerName, sellerEmail, sellerEmail, baseUrl, productId)
+	`, productName, formattedPrice, sellerName, sellerEmail, sellerEmail, baseUrl, productId)
 
 	if err := sendEmailViaGmail(winnerEmail, winnerSubject, winnerHtml); err != nil {
 		fmt.Printf("Error sending to winner: %v\n", err)
@@ -507,15 +522,15 @@ func sendAuctionSuccessEmail(sellerEmail, winnerEmail, productName, price, produ
 }
 
 func sendAuctionFailEmail(sellerEmail, productName string) error {
-	subject := "Auction Ended - No Bids Received"
+	subject := "Phiên đấu giá kết thúc - Không có người tham gia"
 	html := fmt.Sprintf(`
 		<html>
 		<body>
-			<h2>Auction Ended</h2>
-			<p>Your auction for <strong>%s</strong> has ended.</p>
-			<p>Unfortunately, no bids were received during this auction period.</p>
-			<p>You can consider relisting the item with adjusted pricing or improved descriptions to attract more bidders.</p>
-			<p>Thank you for using TradeBidz!</p>
+			<h2>Phiên đấu giá đã kết thúc</h2>
+			<p>Phiên đấu giá cho sản phẩm <strong>%s</strong> của bạn đã kết thúc.</p>
+			<p>Rất tiếc, không có giá thầu nào được đặt trong thời gian đấu giá.</p>
+			<p>Bạn có thể cân nhắc đăng lại sản phẩm với giá cả điều chỉnh hoặc mô tả chi tiết hơn để thu hút người mua.</p>
+			<p>Cảm ơn bạn đã sử dụng TradeBidz!</p>
 		</body>
 		</html>
 	`, productName)
@@ -524,16 +539,16 @@ func sendAuctionFailEmail(sellerEmail, productName string) error {
 }
 
 func sendNewQuestionEmail(sellerEmail, productName, question, productUrl string) error {
-	subject := "New Question About Your Product - " + productName
+	subject := "Câu hỏi mới về sản phẩm của bạn - " + productName
 	html := fmt.Sprintf(`
 		<html>
 		<body>
-			<h2>New Question Received</h2>
-			<p>A potential buyer has asked a question about your product: <strong>%s</strong></p>
-			<p><strong>Question:</strong></p>
+			<h2>Đã nhận được câu hỏi mới</h2>
+			<p>Một người mua tiềm năng đã đặt câu hỏi về sản phẩm của bạn: <strong>%s</strong></p>
+			<p><strong>Câu hỏi:</strong></p>
 			<p style="padding: 10px; background-color: #f5f5f5; border-left: 3px solid #007bff;">%s</p>
-			<p>Please answer this question to help increase buyer confidence and improve your chances of a successful sale.</p>
-			<p><a href="%s" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Product & Answer Question</a></p>
+			<p>Vui lòng trả lời câu hỏi này để tăng sự tin tưởng của người mua và cải thiện cơ hội bán hàng thành công.</p>
+			<p><a href="%s" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Xem sản phẩm & Trả lời</a></p>
 		</body>
 		</html>
 	`, productName, question, productUrl)
@@ -542,19 +557,19 @@ func sendNewQuestionEmail(sellerEmail, productName, question, productUrl string)
 }
 
 func sendNewAnswerEmail(emails []string, productName, question, answer string) error {
-	subject := "Seller Answered a Question - " + productName
+	subject := "Người bán đã trả lời câu hỏi - " + productName
 
 	for _, email := range emails {
 		html := fmt.Sprintf(`
 			<html>
 			<body>
-				<h2>New Answer Posted</h2>
-				<p>The seller has answered a question about <strong>%s</strong>, a product you're interested in.</p>
-				<p><strong>Question:</strong></p>
+				<h2>Câu trả lời mới</h2>
+				<p>Người bán đã trả lời một câu hỏi về <strong>%s</strong>, sản phẩm mà bạn đang quan tâm.</p>
+				<p><strong>Câu hỏi:</strong></p>
 				<p style="padding: 10px; background-color: #f5f5f5; border-left: 3px solid #007bff;">%s</p>
-				<p><strong>Answer:</strong></p>
+				<p><strong>Trả lời:</strong></p>
 				<p style="padding: 10px; background-color: #e8f4f8; border-left: 3px solid #28a745;">%s</p>
-				<p>This information may help you make a more informed bidding decision.</p>
+				<p>Thông tin này có thể giúp bạn đưa ra quyết định đấu giá sáng suốt hơn.</p>
 			</body>
 			</html>
 		`, productName, question, answer)
@@ -570,18 +585,18 @@ func sendNewAnswerEmail(emails []string, productName, question, answer string) e
 }
 
 func sendDescriptionUpdateEmail(emails []string, productName, description, productUrl string) error {
-	subject := "Product Description Updated - " + productName
+	subject := "Cập nhật mô tả sản phẩm - " + productName
 
 	for _, email := range emails {
 		html := fmt.Sprintf(`
 			<html>
 			<body>
-				<h2>Description Update</h2>
-				<p>The seller has updated the description for <strong>%s</strong>, a product you're interested in.</p>
-				<p><strong>New Description:</strong></p>
+				<h2>Cập nhật mô tả</h2>
+				<p>Người bán đã cập nhật mô tả cho <strong>%s</strong>, sản phẩm mà bạn đang quan tâm.</p>
+				<p><strong>Mô tả mới:</strong></p>
 				<p style="padding: 10px; background-color: #f5f5f5; border-left: 3px solid #ffc107;">%s</p>
-				<p>Please review the updated description to ensure it meets your expectations.</p>
-				<p><a href="%s" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Product</a></p>
+				<p>Vui lòng xem lại mô tả cập nhật để đảm bảo nó đáp ứng mong đợi của bạn.</p>
+				<p><a href="%s" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Xem sản phẩm</a></p>
 			</body>
 			</html>
 		`, productName, description, productUrl)
