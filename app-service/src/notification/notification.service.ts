@@ -15,6 +15,7 @@ export class NotificationService {
     }
 
     async sendBidPlacedEmail(
+        productId: number,
         productName: string,
         newPrice: string,
         sellerEmail: string,
@@ -26,6 +27,7 @@ export class NotificationService {
                 'notification_stream',
                 '*',
                 'type', 'BID_PLACED',
+                'product_id', productId.toString(),
                 'product_name', productName,
                 'new_price', newPrice,
                 'seller_email', sellerEmail,
