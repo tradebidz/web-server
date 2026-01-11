@@ -17,15 +17,16 @@ public class NotificationService {
     private static final String NOTIFICATION_STREAM = "notification_stream";
 
     public void sendBidPlacedEmail(
+            Integer productId,
             String productName,
             String newPrice,
             String sellerEmail,
             String bidderEmail,
-            String prevBidderEmail
-    ) {
+            String prevBidderEmail) {
         try {
             Map<String, String> data = new HashMap<>();
             data.put("type", "BID_PLACED");
+            data.put("product_id", productId.toString());
             data.put("product_name", productName);
             data.put("new_price", newPrice);
             data.put("seller_email", sellerEmail);
@@ -51,8 +52,7 @@ public class NotificationService {
             String sellerName,
             String winnerEmail,
             String winnerName,
-            String winnerAddress
-    ) {
+            String winnerAddress) {
         try {
             Map<String, String> data = new HashMap<>();
             data.put("type", "AUCTION_SUCCESS");
@@ -78,8 +78,7 @@ public class NotificationService {
 
     public void sendAuctionFailEmail(
             String productName,
-            String sellerEmail
-    ) {
+            String sellerEmail) {
         try {
             Map<String, String> data = new HashMap<>();
             data.put("type", "AUCTION_FAIL");
@@ -98,10 +97,9 @@ public class NotificationService {
     }
 
     public void sendBidRejectedEmail(
-        String productName, 
-        String price, 
-        String bidderEmail
-    ) {
+            String productName,
+            String price,
+            String bidderEmail) {
         try {
             Map<String, String> data = new HashMap<>();
             data.put("type", "BID_REJECTED");

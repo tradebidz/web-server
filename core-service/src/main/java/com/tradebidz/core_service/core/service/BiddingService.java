@@ -76,8 +76,9 @@ public class BiddingService {
 
         Optional<Bid> currentLeaderOpt = bidRepo.findTopByProductIdAndStatusOrderByMaxAmountDescTimeAsc(
                 product.getId(), BidStatus.VALID);
-        
-        System.out.println("DEBUG: Bid Request from User " + userId + ": Amount=" + challengerAmount + ", Max=" + challengerMax);
+
+        System.out.println(
+                "DEBUG: Bid Request from User " + userId + ": Amount=" + challengerAmount + ", Max=" + challengerMax);
 
         if (currentLeaderOpt.isEmpty()) {
             System.out.println("DEBUG: No current leader. Creating first bid.");
@@ -96,11 +97,12 @@ public class BiddingService {
                     System.out.println("DEBUG: Raising own bid. OldMax: " + leaderMax + ", NewMax: " + challengerMax);
                     // OLD logic: leaderBid.setMaxAmount(challengerMax); bidRepo.save(leaderBid);
                     // NEW logic: Create new bid & Update price (jump to new bid amount)
-                    
+
                     createBid(product, userId, challengerAmount, challengerMax, req.getIsAutoBid());
-                    System.out.println("Executing consecutive bid logic: Creating new bid for user " + userId + " with amount " + challengerAmount);
+                    System.out.println("Executing consecutive bid logic: Creating new bid for user " + userId
+                            + " with amount " + challengerAmount);
                     updateProduct(product, challengerAmount, userId); // Price jumps to new amount
-                    
+
                     sendBidPlacedEmailNotification(product, userId, previousWinnerId);
                 } else {
                     System.out.println("DEBUG: Bid not higher than own max. Skipping update.");
@@ -211,6 +213,7 @@ public class BiddingService {
             }
 
             notificationService.sendBidPlacedEmail(
+                    product.getId(),
                     product.getName(),
                     product.getCurrentPrice().toString(),
                     seller.getEmail(),

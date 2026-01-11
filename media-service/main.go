@@ -204,13 +204,14 @@ func startEmailWorker() {
 					}
 				case "BID_PLACED":
 					productName, _ := values["product_name"].(string)
+					productId, _ := values["product_id"].(string)
 					newPrice, _ := values["new_price"].(string)
 					sellerEmail, _ := values["seller_email"].(string)
 					bidderEmail, _ := values["bidder_email"].(string)
 					prevBidderEmail, _ := values["prev_bidder_email"].(string)
 					fmt.Printf("Sending bid placed notifications for %s...\n", productName)
 
-					err := sendBidPlacedEmail(sellerEmail, bidderEmail, prevBidderEmail, productName, newPrice)
+					err := sendBidPlacedEmail(sellerEmail, bidderEmail, prevBidderEmail, productName, newPrice, productId)
 					if err != nil {
 						fmt.Printf("Failed to send bid placed emails: %v\n", err)
 					}
@@ -379,7 +380,8 @@ func sendResetPasswordEmail(to string, otp string) error {
 	return sendEmailViaGmail(to, subject, html)
 }
 
-func sendBidPlacedEmail(sellerEmail, bidderEmail, prevBidderEmail, productName, newPrice string) error {
+func sendBidPlacedEmail(sellerEmail, bidderEmail, prevBidderEmail, productName, newPrice, productId string) error {
+	baseUrl := "http://localhost:5173"
 	formattedPrice := formatCurrencyVND(newPrice)
 
 	// 1. Send to Seller
@@ -420,14 +422,18 @@ func sendBidPlacedEmail(sellerEmail, bidderEmail, prevBidderEmail, productName, 
 		prevSubject := "Bạn đã bị vượt giá - " + productName
 		prevHtml := fmt.Sprintf(`
 			<html>
-			<body>
-				<h2>Bạn đã bị vượt giá</h2>
+			<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+				<h2 style="color: #dc3545;">⚠️ Bạn đã bị vượt giá</h2>
 				<p>Ai đó đã đặt giá cao hơn cho sản phẩm: <strong>%s</strong></p>
-				<p>Giá thầu cao nhất hiện tại: <strong>%s</strong></p>
+				<p>Giá thầu cao nhất hiện tại: <strong style="color: #dc3545; font-size: 1.2em;">%s</strong></p>
 				<p>Đừng bỏ lỡ! Hãy đặt giá cao hơn để tiếp tục tham gia.</p>
+				
+				<p style="text-align: center; margin-top: 20px;">
+					<a href="%s/product/%s" style="background-color: #ffc107; color: #333; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">🔥 Đấu giá lại ngay</a>
+				</p>
 			</body>
 			</html>
-		`, productName, formattedPrice)
+		`, productName, formattedPrice, baseUrl, productId)
 		if err := sendEmailViaGmail(prevBidderEmail, prevSubject, prevHtml); err != nil {
 			fmt.Printf("Error sending to prev bidder: %v\n", err)
 		}
@@ -478,7 +484,7 @@ func sendAuctionSuccessEmail(sellerEmail, winnerEmail, productName, price, produ
 			<p>Vui lòng liên hệ với người thắng để sắp xếp thanh toán và giao hàng, hoặc nhấp vào liên kết bên dưới để xem chi tiết đơn hàng.</p>
 			
 			<p style="text-align: center;">
-				<a href="%s/products/%s" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Xem chi tiết đơn hàng</a>
+				<a href="%s/product/%s" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">View Order Details</a>
 			</p>
 		</body>
 		</html>
@@ -508,7 +514,7 @@ func sendAuctionSuccessEmail(sellerEmail, winnerEmail, productName, price, produ
 			<p>Vui lòng hoàn tất đơn hàng bằng cách liên hệ với người bán hoặc tiến hành thanh toán.</p>
 			
 			<p style="text-align: center;">
-				<a href="%s/products/%s" style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Hoàn tất đơn hàng ngay</a>
+				<a href="%s/product/%s" style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold;">Hoàn tất đơn hàng ngay</a>
 			</p>
 		</body>
 		</html>
