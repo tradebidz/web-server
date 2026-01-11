@@ -109,23 +109,11 @@ export class UsersService {
             where: { user_id: userId, status: 'PENDING' }
         });
 
-        // Calculate actual rating from feedbacks
-        const [positiveFeedbacks, totalFeedbacks] = await Promise.all([
-            this.prisma.feedbacks.count({
-                where: { to_user_id: userId, score: 1 }
-            }),
-            this.prisma.feedbacks.count({
-                where: { to_user_id: userId }
-            })
-        ]);
-
-        // Calculate percentage: (positive / total) * 100
-        const rating_score = totalFeedbacks > 0 ? (positiveFeedbacks / totalFeedbacks) * 100 : 0;
-
+        // Return database values directly (rating_score is already a percentage)
         return {
             ...user,
-            rating_score,
-            rating_count: totalFeedbacks,
+            rating_score: user.rating_score || 0,
+            rating_count: user.rating_count || 0,
             has_pending_upgrade_request: !!pendingRequest
         };
     }
@@ -141,22 +129,11 @@ export class UsersService {
             }
         });
 
-        // Calculate actual rating from feedbacks
-        const [positiveFeedbacks, totalFeedbacks] = await Promise.all([
-            this.prisma.feedbacks.count({
-                where: { to_user_id: userId, score: 1 }
-            }),
-            this.prisma.feedbacks.count({
-                where: { to_user_id: userId }
-            })
-        ]);
-
-        const rating_score = totalFeedbacks > 0 ? (positiveFeedbacks / totalFeedbacks) * 100 : 0;
-
+        // Return database values directly (rating_score is already a percentage)
         return {
             ...user,
-            rating_score,
-            rating_count: totalFeedbacks
+            rating_score: user.rating_score || 0,
+            rating_count: user.rating_count || 0
         };
     }
 
@@ -210,22 +187,11 @@ export class UsersService {
             }
         });
 
-        // Calculate actual rating from feedbacks
-        const [positiveFeedbacks, totalFeedbacks] = await Promise.all([
-            this.prisma.feedbacks.count({
-                where: { to_user_id: userId, score: 1 }
-            }),
-            this.prisma.feedbacks.count({
-                where: { to_user_id: userId }
-            })
-        ]);
-
-        const rating_score = totalFeedbacks > 0 ? (positiveFeedbacks / totalFeedbacks) * 100 : 0;
-
+        // Return database values directly (rating_score is already a percentage)
         return {
             ...user,
-            rating_score,
-            rating_count: totalFeedbacks
+            rating_score: user.rating_score || 0,
+            rating_count: user.rating_count || 0
         };
     }
 
