@@ -99,4 +99,141 @@ export class OrderService {
             orderBy: { created_at: 'desc' }
         });
     }
+
+    async uploadPaymentReceipt(userId: number, orderId: number, paymentReceiptUrl: string, shippingAddress: string) {
+        const order = await this.prisma.orders.findUnique({
+            where: { id: orderId }
+        });
+
+        if (!order) {
+            throw new BadRequestException('Đơn hàng không tồn tại');
+        }
+
+        // Only buyer can upload payment receipt
+        if (order.buyer_id !== userId) {
+            throw new ForbiddenException('Chỉ người mua mới có thể đăng hóa đơn chuyển tiền');
+        }
+
+        // Check if payment status is PAID
+        if (order.payment_status !== 'PAID') {
+            throw new BadRequestException('Chỉ có thể đăng hóa đơn khi đơn hàng đã thanh toán');
+        }
+
+        const updatedOrder = await this.prisma.orders.update({
+            where: { id: orderId },
+            data: {
+                payment_receipt_url: paymentReceiptUrl,
+                shipping_address: shippingAddress
+            },
+            include: {
+                products: { include: { product_images: true } },
+                seller: { select: { id: true, full_name: true, email: true } },
+                buyer: { select: { id: true, full_name: true, email: true } }
+            }
+        });
+
+        this.logger.log(
+            'Upload Payment Receipt Success',
+            JSON.stringify({
+                orderId: updatedOrder.id,
+                buyerId: userId,
+                receiptUrl: paymentReceiptUrl
+            })
+        );
+
+        return updatedOrder;
+    }
+
+    async uploadShippingTracking(userId: number, orderId: number, trackingInfo: {
+        trackingCode: string;
+        company?: string;
+        trackingUrl?: string;
+    }) {
+        const order = await this.prisma.orders.findUnique({
+            where: { id: orderId }
+        });
+
+        if (!order) {
+            throw new BadRequestException('Đơn hàng không tồn tại');
+        }
+
+        // Only seller can upload shipping tracking
+        if (order.seller_id !== userId) {
+            throw new ForbiddenException('Chỉ người bán mới có thể đăng vận đơn');
+        }
+
+        // Check if payment receipt has been uploaded
+        if (!order.payment_receipt_url) {
+            throw new BadRequestException('Người mua chưa đăng hóa đơn chuyển tiền');
+        }
+
+        const updatedOrder = await this.prisma.orders.update({
+            where: { id: orderId },
+            data: {
+                shipping_tracking_code: trackingInfo.trackingCode,
+                shipping_company: trackingInfo.company || null,
+                shipping_tracking_url: trackingInfo.trackingUrl || null,
+                status: 'SHIPPED' // Update status to SHIPPED when tracking is added
+            },
+            include: {
+                products: { include: { product_images: true } },
+                seller: { select: { id: true, full_name: true, email: true } },
+                buyer: { select: { id: true, full_name: true, email: true } }
+            }
+        });
+
+        this.logger.log(
+            'Upload Shipping Tracking Success',
+            JSON.stringify({
+                orderId: updatedOrder.id,
+                sellerId: userId,
+                trackingCode: trackingInfo.trackingCode
+            })
+        );
+
+        return updatedOrder;
+    }
+
+    async confirmDelivery(userId: number, orderId: number) {
+        const order = await this.prisma.orders.findUnique({
+            where: { id: orderId }
+        });
+
+        if (!order) {
+            throw new BadRequestException('Đơn hàng không tồn tại');
+        }
+
+        // Only buyer can confirm delivery
+        if (order.buyer_id !== userId) {
+            throw new ForbiddenException('Chỉ người mua mới có thể xác nhận đã nhận hàng');
+        }
+
+        // Check if order has been shipped
+        if (order.status !== 'SHIPPED') {
+            throw new BadRequestException('Chỉ có thể xác nhận đã nhận hàng khi đơn hàng đã được vận chuyển');
+        }
+
+        const updatedOrder = await this.prisma.orders.update({
+            where: { id: orderId },
+            data: {
+                status: 'DELIVERED' // Update status to DELIVERED when buyer confirms
+            },
+            include: {
+                products: { include: { product_images: true } },
+                seller: { select: { id: true, full_name: true, email: true } },
+                buyer: { select: { id: true, full_name: true, email: true } }
+            }
+        });
+
+        this.logger.log(
+            'Confirm Delivery Success',
+            JSON.stringify({
+                orderId: updatedOrder.id,
+                buyerId: userId,
+                status: 'DELIVERED'
+            })
+        );
+
+        return updatedOrder;
+    }
 }
