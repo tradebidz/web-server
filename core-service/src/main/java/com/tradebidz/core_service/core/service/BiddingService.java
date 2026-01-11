@@ -37,6 +37,10 @@ public class BiddingService {
         Product product = productRepo.findByIdWithLock(req.getProductId())
                 .orElseThrow(() -> new RuntimeException("Product not found"));
 
+        if (product.getSellerId().equals(userId)) {
+            throw new RuntimeException("Seller cannot bid on their own product");
+        }
+
         if (!"ACTIVE".equals(product.getStatus().toString())) {
             throw new RuntimeException("Product is not active");
         }

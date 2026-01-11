@@ -166,6 +166,7 @@ func startEmailWorker() {
 		}).Result()
 
 		if err != nil {
+			fmt.Printf("Redis XReadGroup Error: %v\n", err)
 			time.Sleep(1 * time.Second)
 			continue
 		}
