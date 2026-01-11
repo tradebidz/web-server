@@ -190,6 +190,7 @@ export class UsersService {
         // Use EXISTS to find products where the user has placed a bid
         const where = Prisma.sql`
             WHERE p.status = 'ACTIVE' 
+            AND p.end_time > NOW()
             AND EXISTS (SELECT 1 FROM bids b WHERE b.product_id = p.id AND b.bidder_id = ${userId})
         `;
         return this.getProductsWithRawQuery(where);
@@ -199,8 +200,10 @@ export class UsersService {
     async getWonProducts(userId: number) {
         const products = await this.prisma.products.findMany({
             where: {
-                winner_id: userId,
-                status: 'SOLD'
+                OR: [
+                    { winner_id: userId, status: { in: ['SOLD', 'EXPIRED'] } },
+                    { winner_id: userId, status: 'ACTIVE', end_time: { lt: new Date() } }
+                ]
             },
             include: {
                 product_images: {
@@ -301,7 +304,13 @@ export class UsersService {
 
     async getSoldProducts(userId: number) {
         const products = await this.prisma.products.findMany({
-            where: { seller_id: userId, status: { in: ['SOLD', 'CANCELLED'] } },
+            where: {
+                seller_id: userId,
+                OR: [
+                    { status: { in: ['SOLD', 'CANCELLED'] } },
+                    { status: { in: ['ACTIVE', 'EXPIRED'] }, end_time: { lt: new Date() }, winner_id: { not: null } }
+                ]
+            },
             include: {
                 product_images: { where: { is_primary: true } },
                 users_products_winner_idTousers: { select: { id: true, full_name: true } },
@@ -324,7 +333,13 @@ export class UsersService {
 
         if (!product) throw new NotFoundException("Product not found");
         if (product.seller_id !== sellerId) throw new ForbiddenException("You don't have permission");
-        if (product.status !== 'SOLD' || !product.winner_id) throw new BadRequestException("Product is not sold");
+
+        const isSold = product.status === 'SOLD';
+        const isPendingPayment = (product.status === 'ACTIVE' || product.status === 'EXPIRED') &&
+            product.winner_id &&
+            new Date(product.end_time) < new Date();
+
+        if (!isSold && !isPendingPayment) throw new BadRequestException("Product is not sold or pending payment");
 
         await this.prisma.products.update({
             where: { id: productId },
@@ -340,6 +355,8 @@ export class UsersService {
                 comment: "The winner did not pay"
             }
         });
+
+        if (!product.winner_id) throw new BadRequestException("No winner to cancel transaction for");
 
         await this.prisma.users.update({
             where: { id: product.winner_id },

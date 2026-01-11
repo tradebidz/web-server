@@ -72,46 +72,58 @@ public class BiddingService {
 
         Optional<Bid> currentLeaderOpt = bidRepo.findTopByProductIdAndStatusOrderByMaxAmountDescTimeAsc(
                 product.getId(), BidStatus.VALID);
+        
+        System.out.println("DEBUG: Bid Request from User " + userId + ": Amount=" + challengerAmount + ", Max=" + challengerMax);
 
         if (currentLeaderOpt.isEmpty()) {
+            System.out.println("DEBUG: No current leader. Creating first bid.");
             createBid(product, userId, challengerAmount, challengerMax, req.getIsAutoBid());
             updateProduct(product, challengerAmount, userId);
             sendBidPlacedEmailNotification(product, userId, previousWinnerId);
         } else {
             Bid leaderBid = currentLeaderOpt.get();
             BigDecimal leaderMax = leaderBid.getMaxAmount();
+            System.out.println("DEBUG: Current Leader: " + leaderBid.getBidderId() + ", LeaderMax: " + leaderMax);
 
             if (leaderBid.getBidderId().equals(userId)) {
                 // If winner increase their max price
+                System.out.println("DEBUG: User is already the winner. Checking if raise...");
                 if (challengerMax.compareTo(leaderMax) > 0) {
-                    leaderBid.setMaxAmount(challengerMax);
-                    bidRepo.save(leaderBid);
+                    System.out.println("DEBUG: Raising own bid. OldMax: " + leaderMax + ", NewMax: " + challengerMax);
+                    // OLD logic: leaderBid.setMaxAmount(challengerMax); bidRepo.save(leaderBid);
+                    // NEW logic: Create new bid & Update price (jump to new bid amount)
+                    
+                    createBid(product, userId, challengerAmount, challengerMax, req.getIsAutoBid());
+                    System.out.println("Executing consecutive bid logic: Creating new bid for user " + userId + " with amount " + challengerAmount);
+                    updateProduct(product, challengerAmount, userId); // Price jumps to new amount
+                    
+                    sendBidPlacedEmailNotification(product, userId, previousWinnerId);
+                } else {
+                    System.out.println("DEBUG: Bid not higher than own max. Skipping update.");
                 }
-
-                return;
-            }
-
-            if (challengerMax.compareTo(leaderMax) > 0) {
-                BigDecimal newPrice = leaderMax.add(stepPrice);
-                if (newPrice.compareTo(challengerMax) > 0) {
-                    newPrice = challengerMax;
-                }
-
-                createBid(product, userId, newPrice, challengerMax, req.getIsAutoBid());
-                updateProduct(product, newPrice, userId);
-                sendBidPlacedEmailNotification(product, userId, previousWinnerId);
             } else {
-                BigDecimal newPrice = challengerMax.add(stepPrice);
+                if (challengerMax.compareTo(leaderMax) > 0) {
+                    BigDecimal newPrice = leaderMax.add(stepPrice);
+                    if (newPrice.compareTo(challengerMax) > 0) {
+                        newPrice = challengerMax;
+                    }
 
-                if (newPrice.compareTo(leaderMax) > 0) {
-                    newPrice = leaderMax;
+                    createBid(product, userId, newPrice, challengerMax, req.getIsAutoBid());
+                    updateProduct(product, newPrice, userId);
+                    sendBidPlacedEmailNotification(product, userId, previousWinnerId);
+                } else {
+                    BigDecimal newPrice = challengerMax.add(stepPrice);
+
+                    if (newPrice.compareTo(leaderMax) > 0) {
+                        newPrice = leaderMax;
+                    }
+
+                    createBid(product, userId, challengerAmount, challengerMax, req.getIsAutoBid());
+                    createBid(product, leaderBid.getBidderId(), newPrice, leaderMax, true);
+
+                    updateProduct(product, newPrice, leaderBid.getBidderId());
+                    sendBidPlacedEmailNotification(product, leaderBid.getBidderId(), userId);
                 }
-
-                createBid(product, userId, challengerAmount, challengerMax, req.getIsAutoBid());
-                createBid(product, leaderBid.getBidderId(), newPrice, leaderMax, true);
-
-                updateProduct(product, newPrice, leaderBid.getBidderId());
-                sendBidPlacedEmailNotification(product, leaderBid.getBidderId(), userId);
             }
         }
 
@@ -162,10 +174,14 @@ public class BiddingService {
 
             if (seller != null && winner != null) {
                 notificationService.sendAuctionSuccessEmail(
+                        product.getId(),
                         product.getName(),
                         product.getBuyNowPrice().toString(),
                         seller.getEmail(),
-                        winner.getEmail());
+                        seller.getFullName(),
+                        winner.getEmail(),
+                        winner.getFullName(),
+                        winner.getAddress());
             }
         } catch (Exception e) {
             System.err.println("Failed to send buy now notification: " + e.getMessage());

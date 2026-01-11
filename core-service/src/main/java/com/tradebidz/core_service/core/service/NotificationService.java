@@ -1,7 +1,7 @@
 package com.tradebidz.core_service.core.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.connection.stream.ObjectRecord;
+import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.connection.stream.StreamRecords;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -32,9 +32,7 @@ public class NotificationService {
             data.put("bidder_email", bidderEmail);
             data.put("prev_bidder_email", prevBidderEmail != null ? prevBidderEmail : "");
 
-            ObjectRecord<String, Map<String, String>> record = StreamRecords
-                    .newRecord()
-                    .ofObject(data)
+            MapRecord<String, String, String> record = StreamRecords.mapBacked(data)
                     .withStreamKey(NOTIFICATION_STREAM);
 
             redisTemplate.opsForStream().add(record);
@@ -46,22 +44,28 @@ public class NotificationService {
     }
 
     public void sendAuctionSuccessEmail(
+            Integer productId,
             String productName,
             String price,
             String sellerEmail,
-            String winnerEmail
+            String sellerName,
+            String winnerEmail,
+            String winnerName,
+            String winnerAddress
     ) {
         try {
             Map<String, String> data = new HashMap<>();
             data.put("type", "AUCTION_SUCCESS");
+            data.put("product_id", productId.toString());
             data.put("product_name", productName);
             data.put("price", price);
             data.put("seller_email", sellerEmail);
+            data.put("seller_name", sellerName);
             data.put("winner_email", winnerEmail);
+            data.put("winner_name", winnerName);
+            data.put("winner_address", winnerAddress != null ? winnerAddress : "N/A");
 
-            ObjectRecord<String, Map<String, String>> record = StreamRecords
-                    .newRecord()
-                    .ofObject(data)
+            MapRecord<String, String, String> record = StreamRecords.mapBacked(data)
                     .withStreamKey(NOTIFICATION_STREAM);
 
             redisTemplate.opsForStream().add(record);
@@ -82,9 +86,7 @@ public class NotificationService {
             data.put("product_name", productName);
             data.put("seller_email", sellerEmail);
 
-            ObjectRecord<String, Map<String, String>> record = StreamRecords
-                    .newRecord()
-                    .ofObject(data)
+            MapRecord<String, String, String> record = StreamRecords.mapBacked(data)
                     .withStreamKey(NOTIFICATION_STREAM);
 
             redisTemplate.opsForStream().add(record);
@@ -107,9 +109,7 @@ public class NotificationService {
             data.put("new_price", price);
             data.put("bidder_email", bidderEmail);
 
-            ObjectRecord<String, Map<String, String>> record = StreamRecords
-                    .newRecord()
-                    .ofObject(data)
+            MapRecord<String, String, String> record = StreamRecords.mapBacked(data)
                     .withStreamKey(NOTIFICATION_STREAM);
 
             redisTemplate.opsForStream().add(record);
