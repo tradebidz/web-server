@@ -37,6 +37,7 @@ export class AdminService {
                 take: limit,
                 include: {
                     categories: true,
+                    product_images: true,
                     users_products_seller_idTousers: {
                         select: { id: true, full_name: true, email: true }
                     }
