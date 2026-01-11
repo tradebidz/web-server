@@ -114,9 +114,14 @@ export class OrderService {
             throw new ForbiddenException('Chỉ người mua mới có thể đăng hóa đơn chuyển tiền');
         }
 
-        // Check if payment status is PAID
-        if (order.payment_status !== 'PAID') {
-            throw new BadRequestException('Chỉ có thể đăng hóa đơn khi đơn hàng đã thanh toán');
+        // Check if receipt has already been uploaded
+        if (order.payment_receipt_url) {
+            throw new BadRequestException('Hóa đơn đã được đăng tải trước đó');
+        }
+
+        // Allow upload if payment is UNPAID (bank transfer) or PAID (VNPay success)
+        if (order.payment_status !== 'UNPAID' && order.payment_status !== 'PAID') {
+            throw new BadRequestException('Không thể đăng hóa đơn cho đơn hàng này');
         }
 
         const updatedOrder = await this.prisma.orders.update({
