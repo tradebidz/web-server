@@ -344,6 +344,8 @@ export class ProductsService {
     if (!product) throw new BadRequestException('Product not found');
     if (product.status !== 'ACTIVE') throw new BadRequestException('Product has been ended');
 
+    if (!user) throw new ForbiddenException('User not found');
+
     const ratingScore = user.rating_score ?? 0;
 
     if (ratingScore < 80) {
