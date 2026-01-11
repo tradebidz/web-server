@@ -276,6 +276,23 @@ func startEmailWorker() {
 							fmt.Printf("Failed to send new answer emails: %v\n", err)
 						}
 					}
+				case "DESCRIPTION_UPDATE":
+					productName, _ := values["product_name"].(string)
+					description, _ := values["description"].(string)
+					emailsJson, _ := values["emails"].(string)
+					productUrl, _ := values["product_url"].(string)
+
+					var emails []string
+					err := json.Unmarshal([]byte(emailsJson), &emails)
+					if err != nil {
+						fmt.Printf("Failed to parse emails array: %v\n", err)
+					} else {
+						fmt.Printf("Sending description update notification to %d bidders...\n", len(emails))
+						err = sendDescriptionUpdateEmail(emails, productName, description, productUrl)
+						if err != nil {
+							fmt.Printf("Failed to send description update emails: %v\n", err)
+						}
+					}
 				}
 
 				rdb.XAck(ctx, "notification_stream", "email_workers", msg.ID)
@@ -546,6 +563,33 @@ func sendNewAnswerEmail(emails []string, productName, question, answer string) e
 			continue
 		}
 		fmt.Printf("New answer email sent to %s\n", email)
+	}
+
+	return nil
+}
+
+func sendDescriptionUpdateEmail(emails []string, productName, description, productUrl string) error {
+	subject := "Product Description Updated - " + productName
+
+	for _, email := range emails {
+		html := fmt.Sprintf(`
+			<html>
+			<body>
+				<h2>Description Update</h2>
+				<p>The seller has updated the description for <strong>%s</strong>, a product you're interested in.</p>
+				<p><strong>New Description:</strong></p>
+				<p style="padding: 10px; background-color: #f5f5f5; border-left: 3px solid #ffc107;">%s</p>
+				<p>Please review the updated description to ensure it meets your expectations.</p>
+				<p><a href="%s" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Product</a></p>
+			</body>
+			</html>
+		`, productName, description, productUrl)
+
+		if err := sendEmailViaGmail(email, subject, html); err != nil {
+			fmt.Printf("Failed to send description update email to %s: %v\n", email, err)
+			continue
+		}
+		fmt.Printf("Description update email sent to %s\n", email)
 	}
 
 	return nil

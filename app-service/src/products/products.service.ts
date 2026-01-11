@@ -464,7 +464,7 @@ export class ProductsService {
       ${content}
     </div>`;
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. Create the detailed record in product_descriptions
       const descriptionRecord = await tx.product_descriptions.create({
         data: {
@@ -485,6 +485,29 @@ export class ProductsService {
 
       return descriptionRecord;
     });
+
+    // 3. Notify all bidders
+    const allBidders = await this.prisma.bids.findMany({
+      where: { product_id: productId, status: 'VALID' },
+      select: { users: { select: { email: true } } },
+      distinct: ['bidder_id']
+    });
+
+    const bidderEmails = allBidders
+      .map(b => b.users?.email)
+      .filter((email): email is string => email !== null && email !== undefined);
+
+    if (bidderEmails.length > 0) {
+      const productUrl = `http://localhost:5173/products/${productId}`;
+      await this.notificationService.sendDescriptionUpdateEmail(
+        product.name,
+        content,
+        bidderEmails,
+        productUrl
+      );
+    }
+
+    return result;
   }
 
   async banBidder(sellerId: number, productId: number, dto: BanBidderDto) {

@@ -142,6 +142,28 @@ export class NotificationService {
         }
     }
 
+    async sendDescriptionUpdateEmail(
+        productName: string,
+        description: string,
+        emails: string[],
+        productUrl: string,
+    ): Promise<void> {
+        try {
+            await this.redis.xadd(
+                'notification_stream',
+                '*',
+                'type', 'DESCRIPTION_UPDATE',
+                'product_name', productName,
+                'description', description,
+                'emails', JSON.stringify(emails),
+                'product_url', productUrl,
+            );
+            this.logger.log(`DESCRIPTION_UPDATE email event sent to ${emails.length} bidders`);
+        } catch (error) {
+            this.logger.error(`Failed to send DESCRIPTION_UPDATE email event: ${error.message}`);
+        }
+    }
+
     async sendVerifyEmailOtp(email: string, otp: string): Promise<void> {
         try {
             await this.redis.xadd(
