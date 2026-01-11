@@ -344,22 +344,10 @@ export class ProductsService {
     if (!product) throw new BadRequestException('Product not found');
     if (product.status !== 'ACTIVE') throw new BadRequestException('Product has been ended');
 
-    const totalFeedback = await this.prisma.feedbacks.count({
-      where: { to_user_id: userId }
-    });
+    const ratingScore = user.rating_score ?? 0;
 
-    if (totalFeedback === 0) {
-      return { eligible: true, message: "New bidder allowed" };
-    }
-
-    const positiveFeedback = await this.prisma.feedbacks.count({
-      where: { to_user_id: userId, score: { gte: 0 } }
-    });
-
-    const ratio = positiveFeedback / totalFeedback;
-
-    if (ratio < 0.8) {
-      throw new ForbiddenException(`Low credibility score (${(ratio * 100).toFixed(1)}%). Require at least 80% to bid`);
+    if (ratingScore < 80) {
+      throw new ForbiddenException(`Low credibility score (${ratingScore.toFixed(1)}%). Require at least 80% to bid`);
     }
 
     return { eligible: true, message: "Bidder allowed" };
